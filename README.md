@@ -1,6 +1,5 @@
 # Python MCP Sandbox
 
-[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
 
 Python MCP Sandbox is an interactive Python code execution environment that allows users and llms to safely execute Python code and install packages in isolated Docker containers.
@@ -25,7 +24,7 @@ uv venv
 uv run mcp_sandbox.py
 ```
 
-The server will run at http://localhost:8000, and you can interact with it via the MCP Inspector through SSE.
+The default SSE endpoint is http://localhost:8000/sse, and you can interact with it via the MCP Inspector through SSE or any other client that supports SSE connections.
 
 ### Available Tools
 
@@ -41,4 +40,30 @@ python-mcp-sandbox/
 ├── Dockerfile         # Docker configuration for Python containers
 ├── results/           # Directory for generated files
 └── README.md          # Project documentation
+```
+
+## Example Prompt
+```
+I've configured a Python code execution environment for you. You can run Python code using the following steps:
+
+1. First, use the "Create Python virtual environment" tool to create a virtual environment
+   - This will return an environment ID which you'll need for subsequent operations
+
+2. If you need to install packages, use the "Install Python package" tool
+   - Parameters: env_id (environment ID) and package_name (e.g., numpy, pandas)
+   - Example: Install numpy and matplotlib
+
+3. Use the "Execute Python code" tool to run your code
+   - Parameters: env_id (environment ID) and code (Python code)
+   - You can write any Python code including data processing, visualization, file operations, etc.
+
+Example workflow:
+- Create environment → Get environment ID
+- Install necessary packages (like pandas, matplotlib)
+- Execute code (such as data analysis, chart generation)
+- View execution results and generated file links
+
+Code execution happens in a secure sandbox environment. Generated files (images, CSVs, etc.) will be automatically provided with download links.
+
+Remeber not to show the image directly, do not use plt.plot() etc.
 ```
