@@ -1,0 +1,13 @@
+[project]
+name = "python-mcp-sandbox"
+version = "0.1.0"
+description = "Interactive Python code execution environment with isolated virtual environments"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "docker>=7.1.0",
+    "fastmcp>=2.1.2",
+]
+
+[project.scripts]
+mcp-sandbox = "mcp_sandbox:main"
