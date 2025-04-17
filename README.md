@@ -28,9 +28,10 @@ The default SSE endpoint is http://localhost:8000/sse, and you can interact with
 
 ### Available Tools
 
-1. **Create Python Environment**: Creates a new Docker container for Python execution and returns its ID
-2. **Execute Python Code**: Executes Python code in a specified Docker container
-3. **Install Python Package**: Installs Python packages in a specified Docker container
+1. **create_python_env**: Creates a new Python Docker container and returns its ID for subsequent code execution and package installation
+2. **execute_python_code**: Executes Python code in a specified Docker container
+3. **install_package_in_env**: Installs Python packages in a specified Docker container
+4. **check_package_status**: Checks if a package is installed or installation status in a Docker container
 
 ## Project Structure
 
@@ -46,24 +47,32 @@ python-mcp-sandbox/
 ```
 I've configured a Python code execution environment for you. You can run Python code using the following steps:
 
-1. First, use the "Create Python virtual environment" tool to create a virtual environment
-   - This will return an environment ID which you'll need for subsequent operations
+1. First, use the "create_python_env" tool to create a virtual environment
+   - This will return a container_id which you'll need for subsequent operations
 
-2. If you need to install packages, use the "Install Python package" tool
-   - Parameters: env_id (environment ID) and package_name (e.g., numpy, pandas)
-   - Example: Install numpy and matplotlib
+2. If you need to install packages, use the "install_package_in_env" tool
+   - Parameters: container_id and package_name (e.g., numpy, pandas)
+   - This starts asynchronous installation and returns immediately with status
 
-3. Use the "Execute Python code" tool to run your code
-   - Parameters: env_id (environment ID) and code (Python code)
-   - You can write any Python code including data processing, visualization, file operations, etc.
+3. After installing packages, you can check their installation status using the "check_package_status" tool
+   - Parameters: container_id and package_name (name of the package to check)
+   - If the package is still installing, you need to check again using this tool
+
+4. Use the "execute_python_code" tool to run your code
+   - Parameters: container_id and code (Python code)
+   - Returns output, errors and links to any generated files
 
 Example workflow:
-- Create environment → Get environment ID
-- Install necessary packages (like pandas, matplotlib)
-- Execute code (such as data analysis, chart generation)
+- Use create_python_env → Get container_id
+- Use install_package_in_env to install necessary packages (like pandas, matplotlib), with the container_id parameter
+- Use check_package_status to verify package installation, with the same container_id parameter
+- Use execute_python_code to run your code, with the container_id parameter
 - View execution results and generated file links
 
 Code execution happens in a secure sandbox environment. Generated files (images, CSVs, etc.) will be automatically provided with download links.
 
-Remeber not to show the image directly, do not use plt.plot() etc.
+Remember not to show the image directly in the Python code. For visualizations:
+- Save figures to files using plt.savefig() instead of plt.show()
+- For data, use methods like df.to_csv() or df.to_excel() to save as files
+- All saved files will automatically appear as download links in the results
 ```

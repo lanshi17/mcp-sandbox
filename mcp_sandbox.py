@@ -8,6 +8,7 @@ import subprocess
 import base64
 import docker
 import json
+import threading
 from pathlib import Path
 from typing import Dict, Optional, Any, List, Tuple, Union
 from datetime import datetime, timedelta
@@ -130,8 +131,6 @@ class PeriodicTaskManager:
     @staticmethod
     def start_task(task_func, interval_seconds: int, task_name: str) -> None:
         """Start a background periodic task"""
-        import threading
-        
         def periodic_runner():
             while True:
                 try:
@@ -171,6 +170,7 @@ class DockerManager:
         self.cleanup_after_hours = cleanup_after_hours
         self.container_last_used: Dict[str, datetime] = {}
         self.session_container_map: Dict[str, str] = {}
+        self.package_install_status: Dict[str, Dict[str, Any]] = {}
         
         # Initialize Docker client
         try:
@@ -512,16 +512,17 @@ class DockerManager:
                 "file_links": []
             }
     
-    def install_package(self, container_id: str, package_name: str) -> Dict[str, Any]:
-        """Install a package in a Docker container"""
-        # Verify container exists
-        error = self.verify_container_exists(container_id)
-        if error:
-            return error
-        
-        logger.info(f"Installing package {package_name} for container {container_id}")
-        
+    def _install_package_async(self, container_id: str, package_name: str) -> None:
+        """Asynchronously install package and update status"""
         try:
+            status_key = f"{container_id}:{package_name}"
+            self.package_install_status[status_key] = {
+                "status": "installing",
+                "start_time": datetime.now(),
+                "message": f"Installing {package_name}...",
+                "complete": False
+            }
+
             with self._get_running_container(container_id) as container:
                 # Execute pip install command
                 exec_result = container.exec_run(
@@ -538,38 +539,134 @@ class DockerManager:
                 logger.info(f"Package installation output: {output}")
                 logger.info(f"Exit code: {exit_code}")
                 
+                # Update installation status
                 if exit_code == 0:
-                    return {
-                        "success": True, 
-                        "message": f"Successfully installed {package_name} directly in container environment."
+                    self.package_install_status[status_key] = {
+                        "status": "success",
+                        "message": f"Successfully installed {package_name}",
+                        "complete": True,
+                        "success": True,
+                        "end_time": datetime.now()
                     }
                 else:
-                    return {
-                        "success": False,
+                    self.package_install_status[status_key] = {
+                        "status": "failed",
                         "message": f"Failed to install {package_name}: {output}",
-                        "stderr": output
+                        "stderr": output,
+                        "complete": True,
+                        "success": False,
+                        "end_time": datetime.now()
                     }
-        except ValueError as e:
-            # Container not found error from context manager
-            return {
-                "success": False,
-                "message": str(e),
-                "stderr": str(e)
-            }
         except Exception as e:
             logger.error(f"Failed to install package {package_name} for container {container_id}: {e}", exc_info=True)
             
-            # Try to get more detailed error information
+            # Get more detailed error information
             error_message = str(e)
             if hasattr(e, 'stderr') and e.stderr:
                 stderr = e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else str(e.stderr)
                 error_message = f"{error_message}\nDetails: {stderr}"
             
-            return {
-                "success": False, 
-                "message": f"Failed to install {package_name}: {error_message}",
-                "stderr": error_message
+            status_key = f"{container_id}:{package_name}"
+            self.package_install_status[status_key] = {
+                "status": "failed",
+                "message": f"Error: {error_message}",
+                "stderr": error_message,
+                "complete": True,
+                "success": False,
+                "end_time": datetime.now()
             }
+    
+    def install_package(self, container_id: str, package_name: str) -> Dict[str, Any]:
+        """Asynchronously install package and return status immediately"""
+        # Verify container exists
+        error = self.verify_container_exists(container_id)
+        if error:
+            return error
+        
+        logger.info(f"Starting async installation of package {package_name} for container {container_id}")
+        status_key = f"{container_id}:{package_name}"
+        
+        # Check if already installing
+        if status_key in self.package_install_status:
+            status = self.package_install_status[status_key]
+            if status["status"] == "installing" and not status["complete"]:
+                return {
+                    "success": None,
+                    "status": "installing",
+                    "message": f"Package {package_name} installation already in progress"
+                }
+        
+        # Start asynchronous installation thread
+        install_thread = threading.Thread(
+            target=self._install_package_async,
+            args=(container_id, package_name),
+            daemon=True
+        )
+        install_thread.start()
+        
+        # Return "installing" status immediately
+        return {
+            "success": None,
+            "status": "installing",
+            "message": f"Started installation of {package_name}. Use check_package_status to monitor progress."
+        }
+    
+    def check_package_status(self, container_id: str, package_name: str) -> Dict[str, Any]:
+        """Check the installation status of a package"""
+        # Verify container exists
+        error = self.verify_container_exists(container_id)
+        if error:
+            return error
+        
+        status_key = f"{container_id}:{package_name}"
+        
+        # If no installation record found
+        if status_key not in self.package_install_status:
+            # Check if package is already installed (might have been installed without tracking)
+            try:
+                with self._get_running_container(container_id) as container:
+                    # Use pip list and filter results to check if package is installed
+                    exec_result = container.exec_run(
+                        cmd=f"pip list | grep -i {package_name}",
+                        stdout=True,
+                        stderr=True,
+                        privileged=False
+                    )
+                    
+                    output = exec_result.output.decode('utf-8').strip()
+                    
+                    if output and package_name.lower() in output.lower():
+                        return {
+                            "status": "success",
+                            "message": f"Package {package_name} is already installed",
+                            "complete": True,
+                            "success": True
+                        }
+                    else:
+                        return {
+                            "status": "not_found",
+                            "message": f"No installation record found for {package_name}",
+                            "complete": True,
+                            "success": False
+                        }
+            except Exception as e:
+                logger.error(f"Error checking if package {package_name} is installed: {e}")
+                return {
+                    "status": "error",
+                    "message": f"Error checking package status: {str(e)}",
+                    "complete": True,
+                    "success": False
+                }
+        
+        # Return recorded status
+        status = self.package_install_status[status_key]
+        
+        # If installation is in progress, calculate elapsed time
+        if status["status"] == "installing" and not status["complete"]:
+            elapsed_time = datetime.now() - status["start_time"]
+            status["elapsed_seconds"] = elapsed_time.total_seconds()
+        
+        return status
     
     def cleanup_old_containers(self) -> int:
         """Clean up containers that haven't been used for specified time, return number of cleaned containers"""
@@ -607,42 +704,64 @@ class PythonExecutionService:
         
         @self.mcp.tool(
             name="create_python_env", 
-            description="Creates a new Python Docker container and returns its ID for subsequent code execution and package installation"
+            description="Creates a new Python Docker container and returns its ID for subsequent operations. No parameters required."
         )
         def create_python_env() -> str:
             """
             Create a new Python Docker container and return its ID
             
-            The returned container ID can be used in subsequent run_code_in_env and install_package_in_env calls
+            The returned container ID can be used in subsequent execute_python_code and install_package_in_env calls
             The container will be automatically cleaned up after 1 hours of inactivity
             """
             return self.docker_manager.create_container()
 
         @self.mcp.tool(
             name="execute_python_code", 
-            description="Execute Python code in a specified Docker container. Parameters: container_id (string) - The container ID to use, code (string) - The Python code to execute"
+            description="Executes Python code in a Docker container and returns results with links to generated files. Parameters: container_id (string) - The container ID to use, code (string) - The Python code to execute"
         )
         def execute_python_code(container_id: str, code: str) -> Dict[str, Any]:
             """
             Run code in a Python Docker container with specified ID
             
-            Requires a container ID created by create_python_env
+            Parameters:
+            - container_id: ID of the container created by create_python_env
+            - code: Python code to execute
+            
             Returns output, errors and direct links to any generated files
             """
             return self.docker_manager.execute_python_code(container_id, code)
 
         @self.mcp.tool(
             name="install_package_in_env", 
-            description="Install a Python package in a specified Docker container. Parameters: container_id (string) - The container ID to use, package_name (string) - Name of the package to install (e.g., numpy, pandas, matplotlib)"
+            description="Starts asynchronous installation of a Python package in a Docker container. Parameters: container_id (string) - The container ID to use, package_name (string) - Name of the package to install"
         )
         def install_package_in_env(container_id: str, package_name: str) -> Dict[str, Any]:
             """
-            Install a package in a Python Docker container with specified ID
+            Start asynchronous installation of a package in a Python Docker container
             
-            Requires a container ID created by create_python_env
-            Returns a simple success/failure message
+            Parameters:
+            - container_id: ID of the container created by create_python_env
+            - package_name: Name of the package to install (e.g., numpy, pandas)
+            
+            Returns immediately with a status message - use check_package_status to monitor progress
             """
             return self.docker_manager.install_package(container_id, package_name)
+            
+        @self.mcp.tool(
+            name="check_package_status", 
+            description="Checks the installation status of a Python package in a Docker container. Parameters: container_id (string) - The container ID to check, package_name (string) - Name of the package to check"
+        )
+        def check_package_status(container_id: str, package_name: str) -> Dict[str, Any]:
+            """
+            Check the installation status of a package in a Python Docker container
+            
+            Parameters:
+            - container_id: ID of the container created by create_python_env
+            - package_name: Name of the package to check
+            
+            Returns the current status of the package installation (success, installing, failed)
+            """
+            return self.docker_manager.check_package_status(container_id, package_name)
 
 # Initialize service
 service = PythonExecutionService()
