@@ -369,13 +369,13 @@ class DockerManager:
             }
     
     def install_package(self, container_id: str, package_name: str) -> Dict[str, Any]:
-        """Asynchronously install package and return status immediately"""
+        """Install package, directly return success if completes within 5 seconds"""
         # Verify container exists
         error = self.verify_container_exists(container_id)
         if error:
             return error
         
-        logger.info(f"Starting async installation of package {package_name} for container {container_id}")
+        logger.info(f"Starting installation of package {package_name} for container {container_id}")
         status_key = f"{container_id}:{package_name}"
         
         # Check if already installing
@@ -388,20 +388,121 @@ class DockerManager:
                     "message": f"Package {package_name} installation already in progress"
                 }
         
-        # Start asynchronous installation thread
+        # Mark as installing for tracking
+        self.package_install_status[status_key] = {
+            "status": "installing",
+            "start_time": datetime.now(),
+            "message": f"Installing {package_name}...",
+            "complete": False
+        }
+        
+        # Create and start installation in a separate thread that we'll monitor
         install_thread = threading.Thread(
-            target=self._install_package_async,
+            target=self._install_package_sync,
             args=(container_id, package_name),
             daemon=True
         )
         install_thread.start()
         
-        # Return "installing" status immediately
-        return {
-            "success": None,
-            "status": "installing",
-            "message": f"Started installation of {package_name}. Use check_package_status to monitor progress."
-        }
+        # Wait up to 5 seconds for installation to complete
+        try:
+            import time
+            start_time = time.time()
+            max_wait = 5  # seconds
+            
+            while time.time() - start_time < max_wait:
+                # Check if installation completed
+                if status_key in self.package_install_status:
+                    status = self.package_install_status[status_key]
+                    if status.get("complete", False):
+                        # Installation completed within 5 seconds
+                        logger.info(f"Package {package_name} installed within 5 seconds: {status}")
+                        return status
+                
+                # Sleep a short time before checking again
+                time.sleep(0.1)
+            
+            # If we're here, installation is taking longer than 5 seconds
+            logger.info(f"Installation of {package_name} is taking longer than 5 seconds, continuing in background")
+            
+            # Note: We don't start a new thread, the original one continues in background
+            return {
+                "success": None,
+                "status": "installing",
+                "message": f"Installation of {package_name} in progress. Use check_package_status to monitor progress."
+            }
+            
+        except Exception as e:
+            logger.error(f"Error while monitoring installation: {e}", exc_info=True)
+            # Let the installation continue in background
+            return {
+                "success": None,
+                "status": "installing",
+                "message": f"Installation of {package_name} in progress. Use check_package_status to monitor progress."
+            }
+    
+    def _install_package_sync(self, container_id: str, package_name: str) -> Dict[str, Any]:
+        """Synchronously install package and return result"""
+        status_key = f"{container_id}:{package_name}"
+        
+        try:
+            with self._get_running_container(container_id) as container:
+                # Execute pip install command
+                exec_result = container.exec_run(
+                    cmd=f"pip install {package_name}",
+                    stdout=True,
+                    stderr=True,
+                    privileged=False
+                )
+                
+                exit_code = exec_result.exit_code
+                output = exec_result.output.decode('utf-8')
+                
+                # Log the output
+                logger.info(f"Package installation output: {output}")
+                logger.info(f"Exit code: {exit_code}")
+                
+                # Update installation status
+                if exit_code == 0:
+                    status = {
+                        "status": "success",
+                        "message": f"Successfully installed {package_name}",
+                        "complete": True,
+                        "success": True,
+                        "end_time": datetime.now()
+                    }
+                    self.package_install_status[status_key] = status
+                    return status
+                else:
+                    status = {
+                        "status": "failed",
+                        "message": f"Failed to install {package_name}: {output}",
+                        "stderr": output,
+                        "complete": True,
+                        "success": False,
+                        "end_time": datetime.now()
+                    }
+                    self.package_install_status[status_key] = status
+                    return status
+        except Exception as e:
+            logger.error(f"Failed to install package {package_name} for container {container_id}: {e}", exc_info=True)
+            
+            # Get more detailed error information
+            error_message = str(e)
+            if hasattr(e, 'stderr') and e.stderr:
+                stderr = e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else str(e.stderr)
+                error_message = f"{error_message}\nDetails: {stderr}"
+            
+            status = {
+                "status": "failed",
+                "message": f"Error: {error_message}",
+                "stderr": error_message,
+                "complete": True,
+                "success": False,
+                "end_time": datetime.now()
+            }
+            self.package_install_status[status_key] = status
+            return status
     
     def check_package_status(self, container_id: str, package_name: str) -> Dict[str, Any]:
         """Check the installation status of a package"""
