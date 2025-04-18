@@ -513,6 +513,43 @@ class DockerManager:
         
         status_key = f"{container_id}:{package_name}"
         
+        # If we have a record and it's complete, return it immediately
+        if status_key in self.package_install_status:
+            status = self.package_install_status[status_key]
+            if status.get("complete", False):
+                return status
+        
+        # If installation is in progress, wait up to 5 seconds for completion
+        if status_key in self.package_install_status and self.package_install_status[status_key]["status"] == "installing":
+            try:
+                import time
+                start_time = time.time()
+                max_wait = 5  # seconds
+                
+                while time.time() - start_time < max_wait:
+                    # Refresh status
+                    status = self.package_install_status[status_key]
+                    
+                    # If installation completed, return status immediately
+                    if status.get("complete", False):
+                        logger.info(f"Package {package_name} installation completed within check window")
+                        return status
+                    
+                    # Sleep a short time before checking again
+                    time.sleep(0.1)
+                
+                # If we're here, installation is still in progress after 5 seconds
+                logger.info(f"Package {package_name} installation still in progress after 5 seconds")
+                
+                # Calculate elapsed time
+                elapsed_time = datetime.now() - status["start_time"]
+                status["elapsed_seconds"] = elapsed_time.total_seconds()
+                
+                return status
+            except Exception as e:
+                logger.error(f"Error while waiting for package status: {e}", exc_info=True)
+                # Continue with regular status check
+        
         # If no installation record found
         if status_key not in self.package_install_status:
             # Check if package is already installed (might have been installed without tracking)
@@ -555,7 +592,7 @@ class DockerManager:
         status = self.package_install_status[status_key]
         
         # If installation is in progress, calculate elapsed time
-        if status["status"] == "installing" and not status["complete"]:
+        if status["status"] == "installing" and not status.get("complete", False):
             elapsed_time = datetime.now() - status["start_time"]
             status["elapsed_seconds"] = elapsed_time.total_seconds()
         
