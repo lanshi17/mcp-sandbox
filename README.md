@@ -1,8 +1,13 @@
 # Python MCP Sandbox
 
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![UV](https://img.shields.io/badge/UV-Package%20Manager-blueviolet)](https://github.com/astral-sh/uv)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-brightgreen)](https://github.com/estitesc/mission-control-link)
 
-Python MCP Sandbox is an interactive Python code execution environment that allows users and llms to safely execute Python code and install packages in isolated Docker containers.
+[中文文档](README_zh.md) | English
+
+Python MCP Sandbox is an interactive Python code execution tool that allows users and LLMs to safely execute Python code and install packages in isolated Docker containers.
 
 ## Features
 
@@ -37,10 +42,26 @@ The default SSE endpoint is http://localhost:8000/sse, and you can interact with
 
 ```
 python-mcp-sandbox/
-├── mcp_sandbox.py     # Main application file
-├── Dockerfile         # Docker configuration for Python containers
-├── results/           # Directory for generated files
-└── README.md          # Project documentation
+├── main.py                    # Application entry point
+├── requirements.txt           # Project dependencies
+├── Dockerfile                 # Docker configuration for Python containers
+├── results/                   # Directory for generated files
+├── mcp_sandbox/               # Main package directory
+│   ├── __init__.py
+│   ├── models.py              # Pydantic models
+│   ├── api/                   # API related components
+│   │   ├── __init__.py
+│   │   └── routes.py          # API route definitions
+│   ├── core/                  # Core functionality
+│   │   ├── __init__.py
+│   │   ├── docker_manager.py  # Docker container management
+│   │   └── python_service.py  # Python execution service
+│   └── utils/                 # Utilities
+│       ├── __init__.py
+│       ├── config.py          # Configuration constants
+│       ├── file_manager.py    # File management
+│       └── task_manager.py    # Periodic task management
+└── README.md                  # Project documentation
 ```
 
 ## Example Prompt

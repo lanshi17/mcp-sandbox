@@ -1,171 +1,18 @@
-import os
-import sys
 import uuid
-import time
-import shutil
-import logging
-import subprocess
-import base64
 import docker
-import json
 import threading
-from pathlib import Path
-from typing import Dict, Optional, Any, List, Tuple, Union
 from datetime import datetime, timedelta
+from typing import Dict, Optional, Any, List, Tuple
 from contextlib import contextmanager
-from fastmcp import FastMCP
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
-from starlette.requests import Request
-from mcp.server.sse import SseServerTransport
-from mcp.server import Server
+from pathlib import Path
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(), logging.FileHandler("docker_manager.log")]
-)
-logger = logging.getLogger("DockerManager")
+from mcp_sandbox.utils.config import logger, RESULTS_DIR, DEFAULT_DOCKER_IMAGE
+from mcp_sandbox.utils.file_manager import collect_output_files, check_and_delete_files, cleanup_container_files
 
-# Create FastAPI app
-app = FastAPI(title="Python Docker Executor")
-
-# Create results directory (make absolute)
-RESULTS_DIR = Path("results").resolve()
-RESULTS_DIR.mkdir(exist_ok=True)
-
-# Dictionary to store accessed files for delayed deletion
-files_to_delete = {}
-
-# Dictionary to map files to their container IDs
-file_container_map = {}
-
-# Mount static files
-app.mount("/static", StaticFiles(directory=str(RESULTS_DIR)), name="static")
-
-# Models
-class FileLink(BaseModel):
-    name: str
-    url: str
-
-class CodeExecutionResponse(BaseModel):
-    stdout: str
-    stderr: str
-    exit_code: int
-    files: List[str] = []
-    file_links: List[FileLink] = []
-    error: Optional[str] = None
-
-# File management functions
-def schedule_file_deletion(file_path: Path, hours: int = 1, container_id: Optional[str] = None) -> None:
-    """Schedule a file for deletion after specified hours"""
-    if file_path.exists() and file_path.is_file():
-        delete_time = datetime.now() + timedelta(hours=hours)
-        files_to_delete[str(file_path)] = delete_time
-        
-        # Store container association if provided
-        if container_id:
-            file_container_map[str(file_path)] = container_id
-            
-        logger.info(f"Scheduled file deletion at {delete_time.strftime('%Y-%m-%d %H:%M:%S')} for: {file_path.name}")
-
-def generate_safe_filename(base_name: str, container_id: str) -> str:
-    """Generate a safe filename with container ID and timestamp"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    container_short_id = container_id[:8] if container_id else "unknown"
-    
-    # Extract extension if present
-    name_parts = base_name.split('.')
-    if len(name_parts) > 1:
-        ext = name_parts[-1]
-        name_without_ext = '.'.join(name_parts[:-1])
-        return f"{name_without_ext}_{container_short_id}_{timestamp}.{ext}"
-    else:
-        return f"{base_name}_{container_short_id}_{timestamp}"
-
-def cleanup_container_files(container_id: str) -> None:
-    """Clean up files associated with a specific container"""
-    files_to_remove = [file_path for file_path, cid in file_container_map.items() 
-                     if cid == container_id]
-    
-    for file_path_str in files_to_remove:
-        file_path = Path(file_path_str)
-        if file_path.exists() and file_path.is_file():
-            try:
-                file_path.unlink()
-                logger.info(f"Deleted file for container {container_id}: {file_path.name}")
-            except Exception as e:
-                logger.error(f"Error deleting file: {e}")
-        
-        # Remove from maps
-        file_container_map.pop(file_path_str, None)
-        files_to_delete.pop(file_path_str, None)
-
-def check_and_delete_files() -> None:
-    """Check and delete files scheduled for deletion"""
-    current_time = datetime.now()
-    files_to_remove = []
-    
-    for file_path_str, delete_time in files_to_delete.items():
-        if current_time >= delete_time:
-            file_path = Path(file_path_str)
-            if file_path.exists() and file_path.is_file():
-                try:
-                    file_path.unlink()
-                    logger.info(f"Deleted scheduled file: {file_path.name}")
-                except Exception as e:
-                    logger.error(f"Error deleting file: {e}")
-            files_to_remove.append(file_path_str)
-    
-    # Remove processed files from dictionary
-    for file_path in files_to_remove:
-        files_to_delete.pop(file_path, None)
-        file_container_map.pop(file_path, None)
-
-class PeriodicTaskManager:
-    """Manager for periodic background tasks"""
-    
-    @staticmethod
-    def start_task(task_func, interval_seconds: int, task_name: str) -> None:
-        """Start a background periodic task"""
-        def periodic_runner():
-            while True:
-                try:
-                    task_func()
-                    time.sleep(interval_seconds)
-                except Exception as e:
-                    logger.error(f"{task_name} task error: {e}")
-        
-        task_thread = threading.Thread(target=periodic_runner, daemon=True)
-        task_thread.start()
-        logger.info(f"Started {task_name} task")
-
-    @staticmethod
-    def start_file_cleanup() -> None:
-        """Start background task for periodic file cleanup"""
-        PeriodicTaskManager.start_task(check_and_delete_files, 600, "automatic file cleanup")
-
-# File access middleware
-@app.middleware("http")
-async def track_file_access(request: Request, call_next):
-    """Middleware to track file access but not schedule deletion"""
-    response = await call_next(request)
-    
-    if request.url.path.startswith("/static/"):
-        file_name = request.url.path.split("/")[-1]
-        if file_name:
-            logger.info(f"File accessed: {file_name}")
-    
-    return response
-
-# Docker container management
 class DockerManager:
     """Manage Docker containers with automatic creation and cleanup"""
     
-    def __init__(self, base_image: str, cleanup_after_hours: int = 1):
+    def __init__(self, base_image: str = DEFAULT_DOCKER_IMAGE, cleanup_after_hours: int = 1):
         self.base_image = base_image
         self.cleanup_after_hours = cleanup_after_hours
         self.container_last_used: Dict[str, datetime] = {}
@@ -185,7 +32,6 @@ class DockerManager:
         
         # Load existing containers
         self._load_container_records()
-        self._start_cleanup_task()
         
         logger.info(f"DockerManager initialized, using base image: {self.base_image}")
     
@@ -233,10 +79,6 @@ class DockerManager:
                 logger.info(f"Loaded existing container: {container_id}")
         except Exception as e:
             logger.error(f"Failed to load existing containers: {e}", exc_info=True)
-    
-    def _start_cleanup_task(self) -> None:
-        """Start background cleanup task"""
-        PeriodicTaskManager.start_task(self.cleanup_old_containers, 3600, "container cleanup")
     
     def get_container_for_session(self, session_id: str) -> str:
         """Get container ID for a session, create new one if not exists"""
@@ -350,56 +192,6 @@ class DockerManager:
             self._clean_stale_container_records(container_id)
             raise ValueError(f"Container {container_id} not found.")
     
-    def collect_output_files(self, container_id: str) -> Tuple[List[str], List[Dict[str, str]]]:
-        """Collect generated files and create links"""
-        base_url = "http://localhost:8000/static/"  # TODO: Make configurable
-        file_links = []
-        files = []
-        
-        # Get container short ID for file identification
-        container_short_id = container_id[:8] if container_id else "unknown"
-        
-        for file in RESULTS_DIR.glob("*"):
-            if file.is_file():
-                file_name = file.name
-                current_path = file
-                
-                # Check if the file belongs to the current container
-                # If the file name doesn't contain a container ID, assume it's a newly created file that should be renamed and included in results
-                # If the file name already has a container ID, only include files that match the current container
-                is_new_file = all(cid[:8] not in file_name for cid in self.container_last_used.keys())
-                is_current_container_file = container_short_id in file_name
-                
-                if is_new_file or is_current_container_file:
-                    # For new files without container ID, rename them
-                    if container_short_id not in file_name:
-                        # Create a safe file with container ID
-                        safe_name = generate_safe_filename(file_name, container_id)
-                        new_path = RESULTS_DIR / safe_name
-                        
-                        # Rename the file
-                        try:
-                            shutil.move(str(file), str(new_path))
-                            logger.info(f"Renamed file {file_name} to {safe_name}")
-                            file_name = safe_name
-                            current_path = new_path
-                            
-                            # Map file to container
-                            file_container_map[str(new_path)] = container_id
-                        except Exception as e:
-                            logger.error(f"Failed to rename file {file_name}: {e}")
-                    
-                    # Schedule deletion for all files (renamed or not)
-                    if str(current_path) not in files_to_delete:
-                        schedule_file_deletion(current_path, hours=1, container_id=container_id)
-                        logger.info(f"Scheduled deletion for file: {file_name}")
-                    
-                    files.append(file_name)
-                    file_url = f"{base_url}{file_name}"
-                    file_links.append({"name": file_name, "url": file_url})
-        
-        return files, file_links
-    
     def execute_python_code(self, container_id: str, code: str) -> Dict[str, Any]:
         """Execute Python code in a Docker container"""
         # Verify container exists
@@ -475,7 +267,7 @@ class DockerManager:
                     logger.warning(stderr)
                 
                 # Collect output files - pass container_id for file safety
-                files, file_links = self.collect_output_files(container_id)
+                files, file_links = collect_output_files(container_id, self.container_last_used)
                 
                 return {
                     "stdout": stdout,
@@ -689,122 +481,4 @@ class DockerManager:
             # Clean up records and associated files
             self._clean_stale_container_records(container_id)
         
-        return len(containers_to_remove)
-
-class PythonExecutionService:
-    """Service for Python code execution using Docker containers"""
-    
-    def __init__(self):
-        self.docker_manager = DockerManager(base_image="python-sandbox:latest")
-        self.mcp = FastMCP("Python Docker Executor 🐳")
-        self._register_mcp_tools()
-    
-    def _register_mcp_tools(self):
-        """Register all MCP tools"""
-        
-        @self.mcp.tool(
-            name="create_python_env", 
-            description="Creates a new Python Docker container and returns its ID for subsequent operations. No parameters required."
-        )
-        def create_python_env() -> str:
-            """
-            Create a new Python Docker container and return its ID
-            
-            The returned container ID can be used in subsequent execute_python_code and install_package_in_env calls
-            The container will be automatically cleaned up after 1 hours of inactivity
-            """
-            return self.docker_manager.create_container()
-
-        @self.mcp.tool(
-            name="execute_python_code", 
-            description="Executes Python code in a Docker container and returns results with links to generated files. Parameters: container_id (string) - The container ID to use, code (string) - The Python code to execute"
-        )
-        def execute_python_code(container_id: str, code: str) -> Dict[str, Any]:
-            """
-            Run code in a Python Docker container with specified ID
-            
-            Parameters:
-            - container_id: ID of the container created by create_python_env
-            - code: Python code to execute
-            
-            Returns output, errors and direct links to any generated files
-            """
-            return self.docker_manager.execute_python_code(container_id, code)
-
-        @self.mcp.tool(
-            name="install_package_in_env", 
-            description="Starts asynchronous installation of a Python package in a Docker container. Parameters: container_id (string) - The container ID to use, package_name (string) - Name of the package to install"
-        )
-        def install_package_in_env(container_id: str, package_name: str) -> Dict[str, Any]:
-            """
-            Start asynchronous installation of a package in a Python Docker container
-            
-            Parameters:
-            - container_id: ID of the container created by create_python_env
-            - package_name: Name of the package to install (e.g., numpy, pandas)
-            
-            Returns immediately with a status message - use check_package_status to monitor progress
-            """
-            return self.docker_manager.install_package(container_id, package_name)
-            
-        @self.mcp.tool(
-            name="check_package_status", 
-            description="Checks the installation status of a Python package in a Docker container. Parameters: container_id (string) - The container ID to check, package_name (string) - Name of the package to check"
-        )
-        def check_package_status(container_id: str, package_name: str) -> Dict[str, Any]:
-            """
-            Check the installation status of a package in a Python Docker container
-            
-            Parameters:
-            - container_id: ID of the container created by create_python_env
-            - package_name: Name of the package to check
-            
-            Returns the current status of the package installation (success, installing, failed)
-            """
-            return self.docker_manager.check_package_status(container_id, package_name)
-
-# Initialize service
-service = PythonExecutionService()
-mcp = service.mcp
-docker_manager = service.docker_manager
-
-# SSE handling
-sse = SseServerTransport("/messages/")
-
-async def handle_sse(request: Request) -> None:
-    """Handle SSE connections"""
-    mcp_server = mcp._mcp_server
-    
-    # Set up initialization options
-    initialization_options = mcp_server.create_initialization_options()
-    
-    async with sse.connect_sse(
-            request.scope,
-            request.receive,
-            request._send,  # noqa: SLF001
-    ) as (read_stream, write_stream):
-        await mcp_server.run(
-            read_stream,
-            write_stream,
-            initialization_options,
-        )
-
-# Add SSE routes
-app.add_route("/sse", handle_sse)
-app.mount("/messages/", app=sse.handle_post_message)
-
-if __name__ == "__main__":
-    # Ensure RESULTS_DIR exists (absolute path is resolved globally)
-    RESULTS_DIR.mkdir(exist_ok=True)
-
-    # Start file cleanup task
-    PeriodicTaskManager.start_file_cleanup()
-
-    # Start MCP service
-    logger.info("Starting Python Docker Executor service")
-    logger.info(f"Using Docker base image: {docker_manager.base_image}")
-    logger.info(f"Using results directory: {RESULTS_DIR}")
-
-    # Start FastAPI server
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+        return len(containers_to_remove) 
