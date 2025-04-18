@@ -1,7 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from mcp_sandbox.utils.task_manager import PeriodicTaskManager
-from mcp_sandbox.utils.file_manager import check_and_delete_files
+from mcp_sandbox.utils.file_manager import check_and_delete_files, cleanup_results_directory
 from mcp_sandbox.core.python_service import PythonExecutionService
 from mcp_sandbox.api.routes import configure_app
 from mcp_sandbox.utils.config import logger, RESULTS_DIR
@@ -21,6 +21,9 @@ def main():
 
     # Ensure RESULTS_DIR exists
     RESULTS_DIR.mkdir(exist_ok=True)
+    
+    # Clean up results directory on startup
+    cleanup_results_directory()
 
     # Start file cleanup task
     PeriodicTaskManager.start_file_cleanup(check_and_delete_files)

@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List, Tuple, Dict
 import shutil
+import re
 
 from mcp_sandbox.utils.config import logger, RESULTS_DIR, BASE_URL
 
@@ -10,6 +11,30 @@ files_to_delete = {}
 
 # Dictionary to map files to their container IDs
 file_container_map = {}
+
+def cleanup_results_directory() -> None:
+    """Clean up all files in the results directory on startup"""
+    try:
+        # Ensure directory exists
+        RESULTS_DIR.mkdir(exist_ok=True)
+        
+        # Remove all files in the directory
+        count = 0
+        for file in RESULTS_DIR.glob("*"):
+            if file.is_file():
+                try:
+                    file.unlink()
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Error deleting file {file.name}: {e}")
+        
+        # Clear tracking dictionaries
+        files_to_delete.clear()
+        file_container_map.clear()
+        
+        logger.info(f"Cleaned up {count} files from results directory on startup")
+    except Exception as e:
+        logger.error(f"Error cleaning up results directory: {e}")
 
 def schedule_file_deletion(file_path: Path, hours: int = 1, container_id: Optional[str] = None) -> None:
     """Schedule a file for deletion after specified hours"""
@@ -30,12 +55,29 @@ def generate_safe_filename(base_name: str, container_id: str) -> str:
     
     # Extract extension if present
     name_parts = base_name.split('.')
+    
+    has_timestamp = False
+    timestamp_part = ""
+    
+    base_parts = name_parts[0].split('_')
+    
+    base_without_ids = base_parts[0]
+    
+    for part in base_parts[1:]:
+        if re.match(r'\d{8}_\d{6}', part):
+            has_timestamp = True
+            timestamp_part = part
+            break
+    
+    if not has_timestamp:
+        timestamp_part = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # 构建新文件名
     if len(name_parts) > 1:
         ext = name_parts[-1]
-        name_without_ext = '.'.join(name_parts[:-1])
-        return f"{name_without_ext}_{container_short_id}_{timestamp}.{ext}"
+        return f"{base_without_ids}_{container_short_id}_{timestamp_part}.{ext}"
     else:
-        return f"{base_name}_{container_short_id}_{timestamp}"
+        return f"{base_without_ids}_{container_short_id}_{timestamp_part}"
 
 def cleanup_container_files(container_id: str) -> None:
     """Clean up files associated with a specific container"""
@@ -89,15 +131,22 @@ def collect_output_files(container_id: str, container_last_used: Dict[str, datet
             file_name = file.name
             current_path = file
             
-            # Check if the file belongs to the current container
-            # If the file name doesn't contain a container ID, assume it's a newly created file that should be renamed and included in results
-            # If the file name already has a container ID, only include files that match the current container
-            is_new_file = all(cid[:8] not in file_name for cid in container_last_used.keys())
+            # Check if file already has a container ID
+            # 1. If filename contains any container ID, keep original name
+            # 2. Only files without any container ID need current container ID and renaming
+            
+            # Check if file contains any known container ID
+            has_container_id = any(cid[:8] in file_name for cid in container_last_used.keys())
+            
+            # If file already has current container ID, consider it as current container file
             is_current_container_file = container_short_id in file_name
             
+            # If file is new or belongs to current container, process it
+            is_new_file = not has_container_id
+            
             if is_new_file or is_current_container_file:
-                # For new files without container ID, rename them
-                if container_short_id not in file_name:
+                # Only new files (no container ID) need renaming
+                if is_new_file and not is_current_container_file:
                     # Create a safe file with container ID
                     safe_name = generate_safe_filename(file_name, container_id)
                     new_path = RESULTS_DIR / safe_name
