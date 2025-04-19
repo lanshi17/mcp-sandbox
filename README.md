@@ -57,7 +57,7 @@ python-mcp-sandbox/
 │   ├── core/                  # Core functionality
 │   │   ├── __init__.py
 │   │   ├── docker_manager.py  # Docker container management
-│   │   └── python_service.py  # Python execution service
+│   │   └── mcp_tools.py       # MCP tools
 │   └── utils/                 # Utilities
 │       ├── __init__.py
 │       ├── config.py          # Configuration constants

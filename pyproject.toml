@@ -8,8 +8,9 @@ dependencies = [
     "docker>=7.1.0",
     "fastapi>=0.115.12",
     "fastmcp>=2.2.0",
+    "ruff>=0.11.6",
     "tomli>=2.2.1",
 ]
 
 [project.scripts]
-mcp-sandbox = "mcp_sandbox:main"
+mcp-sandbox = "main:main"

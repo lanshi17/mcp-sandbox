@@ -58,7 +58,7 @@ python-mcp-sandbox/
 │   ├── core/                  # 核心功能
 │   │   ├── __init__.py
 │   │   ├── docker_manager.py  # Docker容器管理
-│   │   └── python_service.py  # Python执行服务
+│   │   └── mcp_tools.py  # MCP 工具
 │   └── utils/                 # 实用工具
 │       ├── __init__.py
 │       ├── config.py          # 配置常量

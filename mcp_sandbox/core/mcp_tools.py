@@ -4,8 +4,8 @@ from fastmcp import FastMCP
 from mcp_sandbox.core.docker_manager import DockerManager
 from mcp_sandbox.utils.config import DEFAULT_DOCKER_IMAGE
 
-class PythonExecutionService:
-    """Service for Python code execution using Docker containers"""
+class MCPTools:
+    """A set of MCP tools for Python code execution using Docker containers"""
     
     def __init__(self, base_image: str = DEFAULT_DOCKER_IMAGE):
         self.docker_manager = DockerManager(base_image=base_image)
@@ -38,31 +38,31 @@ class PythonExecutionService:
             
             Parameters:
             - container_id: ID of the container created by create_python_env
-            - code: Python code to execute
+            - code: The Python code to execute
             
-            Returns output, errors and direct links to any generated files
+            Returns a dictionary with execution results and links to generated files
             """
-            return self.docker_manager.execute_python_code(container_id, code)
+            return self.docker_manager.execute_code(container_id, code)
 
         @self.mcp.tool(
-            name="install_package_in_env", 
-            description="Starts asynchronous installation of a Python package in a Docker container. Parameters: container_id (string) - The container ID to use, package_name (string) - Name of the package to install"
+            name="install_package_in_env",
+            description="Installs a Python package in the specified Docker container. Parameters: container_id (string), package_name (string)"
         )
         def install_package_in_env(container_id: str, package_name: str) -> Dict[str, Any]:
             """
-            Start asynchronous installation of a package in a Python Docker container
+            Install a Python package in a Docker container
             
             Parameters:
             - container_id: ID of the container created by create_python_env
-            - package_name: Name of the package to install (e.g., numpy, pandas)
+            - package_name: Name of the package to install
             
-            Returns immediately with a status message - use check_package_status to monitor progress
+            Returns the installation status and logs
             """
             return self.docker_manager.install_package(container_id, package_name)
-            
+
         @self.mcp.tool(
-            name="check_package_status", 
-            description="Checks the installation status of a Python package in a Docker container. Parameters: container_id (string) - The container ID to check, package_name (string) - Name of the package to check"
+            name="check_package_status",
+            description="Checks the installation status of a package in a Docker container. Parameters: container_id (string), package_name (string)"
         )
         def check_package_status(container_id: str, package_name: str) -> Dict[str, Any]:
             """
@@ -74,4 +74,4 @@ class PythonExecutionService:
             
             Returns the current status of the package installation (success, installing, failed)
             """
-            return self.docker_manager.check_package_status(container_id, package_name) 
+            return self.docker_manager.check_package_status(container_id, package_name)

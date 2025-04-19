@@ -1,6 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict
 import shutil
 import re
 
@@ -50,7 +50,6 @@ def schedule_file_deletion(file_path: Path, hours: int = 1, container_id: Option
 
 def generate_safe_filename(base_name: str, container_id: str) -> str:
     """Generate a safe filename with container ID and timestamp"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     container_short_id = container_id[:8] if container_id else "unknown"
     
     # Extract extension if present

@@ -2,14 +2,14 @@ import uvicorn
 from fastapi import FastAPI
 from mcp_sandbox.utils.task_manager import PeriodicTaskManager
 from mcp_sandbox.utils.file_manager import check_and_delete_files, cleanup_results_directory
-from mcp_sandbox.core.python_service import PythonExecutionService
+from mcp_sandbox.core.mcp_tools import MCPTools
 from mcp_sandbox.api.routes import configure_app
 from mcp_sandbox.utils.config import logger, RESULTS_DIR, HOST, PORT
 
 # Initialize service at module level
-service = PythonExecutionService()
-mcp = service.mcp  # Doing this allows fastmcp to find the MCP object 
-docker_manager = service.docker_manager
+mcp_tools = MCPTools()
+mcp_server = mcp_tools.mcp
+docker_manager = mcp_tools.docker_manager
 
 def main():
     """Main entry point for the application"""
@@ -17,7 +17,7 @@ def main():
     app = FastAPI(title="Python Docker Executor")
     
     # Configure app routes and middlewares
-    configure_app(app, mcp._mcp_server)
+    configure_app(app, mcp_server._mcp_server)
 
     # Ensure RESULTS_DIR exists
     RESULTS_DIR.mkdir(exist_ok=True)

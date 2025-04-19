@@ -33,6 +33,10 @@ def configure_app(app: FastAPI, mcp_server):
     app.add_route("/sse", handle_sse)
     app.mount("/messages/", app=sse.handle_post_message)
 
+    @app.get("/health")
+    async def health_check():
+        return {"status": "healthy"}
+
     # File access middleware
     @app.middleware("http")
     async def track_file_access(request: Request, call_next):

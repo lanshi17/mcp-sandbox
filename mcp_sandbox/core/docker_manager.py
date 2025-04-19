@@ -4,7 +4,7 @@ import threading
 import json
 import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any, List, Tuple
+from typing import Dict, Optional, Any
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -198,17 +198,14 @@ class DockerManager:
     def verify_container_exists(self, container_id: str) -> Optional[Dict[str, Any]]:
         """Verify container exists and clean up if not. Returns error dict if not exists."""
         if container_id not in self.container_last_used:
-            return {"error": f"Container {container_id} does not exist or was cleaned up. Please create a new one using create_python_env."}
-        
+            return {"error": True, "message": f"Container not found: {container_id}"}
         try:
             self.docker_client.containers.get(container_id)
-            # Update last used time
             self.container_last_used[container_id] = datetime.now()
             return None
-        except docker.errors.NotFound:
-            # Clean up potentially stale records
+        except docker.errors.NotFound as e:
             self._clean_stale_container_records(container_id)
-            return {"error": f"Container {container_id} not found. Please create a new environment using create_python_env."}
+            return {"error": True, "message": str(e) or f"Container not found: {container_id}"}
     
     def _clean_stale_container_records(self, container_id: str) -> None:
         """Clean up stale container records"""
