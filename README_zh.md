@@ -26,6 +26,8 @@ cd python-mcp-sandbox
 # 安装依赖
 pip install -r requirements.txt
 
+# 激活虚拟环境
+
 # 启动服务器
 python main.py
 ```

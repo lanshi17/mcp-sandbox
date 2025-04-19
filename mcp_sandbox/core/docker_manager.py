@@ -1,12 +1,14 @@
 import uuid
 import docker
 import threading
+import json
+import hashlib
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, List, Tuple
 from contextlib import contextmanager
 from pathlib import Path
 
-from mcp_sandbox.utils.config import logger, RESULTS_DIR, DEFAULT_DOCKER_IMAGE
+from mcp_sandbox.utils.config import logger, RESULTS_DIR, DEFAULT_DOCKER_IMAGE, config
 from mcp_sandbox.utils.file_manager import collect_output_files, check_and_delete_files, cleanup_container_files
 
 class DockerManager:
@@ -37,35 +39,95 @@ class DockerManager:
     
     def _ensure_docker_image(self):
         """Ensure our custom Docker image exists, build it if needed"""
-        custom_image_name = "python-sandbox:latest"
+        custom_image_name = DEFAULT_DOCKER_IMAGE
+        dockerfile_path = Path(config["docker"].get("dockerfile_path", "Dockerfile")).resolve()
+        build_info_file = Path(config["docker"].get("build_info_file", ".docker_build_info")).resolve()
+        check_changes = config["docker"].get("check_dockerfile_changes", True)
         
+        # Check if image already exists
+        image_exists = True
         try:
-            # Check if image exists
             self.docker_client.images.get(custom_image_name)
-            logger.info(f"Using existing Docker image: {custom_image_name}")
+            logger.info(f"Docker image exists: {custom_image_name}")
         except docker.errors.ImageNotFound:
-            # Build the image
-            logger.info(f"Building Docker image: {custom_image_name}")
+            image_exists = False
+            logger.info(f"Docker image not found: {custom_image_name}")
+        
+        # Determine if we need to (re)build the image
+        need_rebuild = not image_exists
+        
+        # Check for Dockerfile changes if enabled
+        if image_exists and check_changes and dockerfile_path.exists():
+            # Calculate current Dockerfile hash
+            current_hash = self._get_file_hash(dockerfile_path)
+            
+            # Get previous build info if available
+            previous_hash = None
+            if build_info_file.exists():
+                try:
+                    with open(build_info_file, 'r') as f:
+                        build_info = json.load(f)
+                        previous_hash = build_info.get('dockerfile_hash')
+                        logger.info(f"Found previous build info with hash: {previous_hash}")
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"Could not read build info file: {e}")
+            
+            # If hash is different or no previous hash, we need to rebuild
+            if previous_hash != current_hash:
+                logger.info(f"Dockerfile has changed (Previous: {previous_hash}, Current: {current_hash})")
+                need_rebuild = True
+        
+        # Build the image if needed
+        if need_rebuild:
+            if not dockerfile_path.exists():
+                logger.error("Dockerfile not found, falling back to base image")
+                return
+            
             try:
-                dockerfile_path = Path("Dockerfile").resolve()
-                if not dockerfile_path.exists():
-                    logger.error("Dockerfile not found, falling back to base image")
-                    return
+                logger.info(f"Building Docker image: {custom_image_name}")
                 
                 # Build the image
                 _, logs = self.docker_client.images.build(
-                    path=".", 
+                    path=str(dockerfile_path.parent), 
+                    dockerfile=str(dockerfile_path.name),
                     tag=custom_image_name,
-                    rm=True
+                    rm=True,
+                    forcerm=True
                 )
+                
+                # Log build output
                 for log in logs:
                     if 'stream' in log:
                         logger.info(log['stream'].strip())
-                        
+                
+                # Save build info
+                if check_changes:
+                    build_info = {
+                        'dockerfile_hash': self._get_file_hash(dockerfile_path),
+                        'build_time': datetime.now().isoformat(),
+                        'image_name': custom_image_name
+                    }
+                    with open(build_info_file, 'w') as f:
+                        json.dump(build_info, f)
+                        logger.info(f"Saved build info to {build_info_file}")
+                
                 self.base_image = custom_image_name
                 logger.info(f"Successfully built Docker image: {custom_image_name}")
             except Exception as e:
                 logger.error(f"Failed to build Docker image: {e}", exc_info=True)
+    
+    def _get_file_hash(self, file_path: Path) -> str:
+        """Calculate SHA256 hash of a file to detect changes"""
+        if not file_path.exists():
+            return ""
+        
+        try:
+            with open(file_path, 'rb') as f:
+                file_hash = hashlib.sha256(f.read()).hexdigest()
+            return file_hash
+        except IOError as e:
+            logger.error(f"Error reading file for hashing: {e}")
+            return ""
     
     def _load_container_records(self) -> None:
         """Load existing container usage records"""

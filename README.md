@@ -25,6 +25,8 @@ cd python-mcp-sandbox
 
 uv venv
 
+# Activate venv
+
 # Start the server
 uv run mcp_sandbox.py
 ```

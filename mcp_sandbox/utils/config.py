@@ -17,6 +17,9 @@ DEFAULT_CONFIG = {
     },
     "docker": {
         "default_image": "python-sandbox:latest",
+        "dockerfile_path": "Dockerfile",
+        "check_dockerfile_changes": True,
+        "build_info_file": ".docker_build_info",
     },
     "logging": {
         "level": "INFO",

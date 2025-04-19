@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv
+RUN pip install uv
+
 # Create non-root user
 RUN groupadd -r python && useradd -r -g python -d /home/python -m python
 
