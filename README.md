@@ -14,7 +14,6 @@ Python MCP Sandbox is an interactive Python code execution tool that allows user
 - 🐳 **Docker Isolation**: Securely run Python code in isolated Docker containers
 - 📦 **Package Management**: Easily install and manage Python packages
 - 📊 **File Generation**: Support for generating files and accessing them via web links
-- 🔄 **Automatic Cleanup**: Containers and generated files are automatically cleaned up after a period of inactivity
 
 ## Installation
 

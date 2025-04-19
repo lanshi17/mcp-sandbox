@@ -1,14 +1,14 @@
 from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
+from mcp_sandbox.api.container_file import router as container_file_router
 from mcp.server.sse import SseServerTransport
 
-from mcp_sandbox.utils.config import logger, RESULTS_DIR
+from mcp_sandbox.utils.config import logger
 
 def configure_app(app: FastAPI, mcp_server):
     """Configure FastAPI app with routes and middleware"""
-    
-    # Mount static files
-    app.mount("/static", StaticFiles(directory=str(RESULTS_DIR)), name="static")
+
+    # Mount container file access routes
+    app.include_router(container_file_router)
 
     # SSE handling
     sse = SseServerTransport("/messages/")

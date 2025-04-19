@@ -3,10 +3,6 @@
 host = "0.0.0.0"
 port = 8000
 
-[paths]
-# Directory for storing results and output files
-results_dir = "results"
-
 [docker]
 # Default Docker image name
 default_image = "python-sandbox:latest"

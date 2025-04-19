@@ -8,8 +8,7 @@ from typing import Dict, Optional, Any
 from contextlib import contextmanager
 from pathlib import Path
 
-from mcp_sandbox.utils.config import logger, RESULTS_DIR, DEFAULT_DOCKER_IMAGE, config
-from mcp_sandbox.utils.file_manager import collect_output_files, check_and_delete_files, cleanup_container_files
+from mcp_sandbox.utils.config import logger, DEFAULT_DOCKER_IMAGE, config
 
 class DockerManager:
     """Manage Docker containers with automatic creation and cleanup"""
@@ -172,7 +171,6 @@ class DockerManager:
                 image=self.base_image,
                 name=container_name,
                 detach=True,
-                volumes={str(RESULTS_DIR.absolute()): {'bind': '/app/results', 'mode': 'rw'}},
                 working_dir='/app/results',
                 labels={"python-sandbox": "true"},
                 # Security constraints
@@ -204,21 +202,8 @@ class DockerManager:
             self.container_last_used[container_id] = datetime.now()
             return None
         except docker.errors.NotFound as e:
-            self._clean_stale_container_records(container_id)
             return {"error": True, "message": str(e) or f"Container not found: {container_id}"}
     
-    def _clean_stale_container_records(self, container_id: str) -> None:
-        """Clean up stale container records"""
-        if container_id in self.container_last_used:
-            del self.container_last_used[container_id]
-        sessions_to_remove = [sid for sid, cid in self.session_container_map.items() if cid == container_id]
-        for session_id in sessions_to_remove:
-            del self.session_container_map[session_id]
-        
-        # Clean up associated files
-        cleanup_container_files(container_id)
-        
-        logger.warning(f"Container not found for known container_id {container_id}. Records cleaned.")
     
     @contextmanager
     def _get_running_container(self, container_id: str):
@@ -248,8 +233,25 @@ class DockerManager:
             
         except docker.errors.NotFound:
             logger.error(f"Container {container_id} not found during operation.")
-            self._clean_stale_container_records(container_id)
             raise ValueError(f"Container {container_id} not found.")
+    
+    def list_files_in_container(self, container_id: str, directory: str = "/app/results") -> list:
+        """List files in a directory inside the container."""
+        try:
+            container = self.docker_client.containers.get(container_id)
+            exec_result = container.exec_run(f"ls -1 {directory}")
+            if exec_result.exit_code != 0:
+                return []
+            files = exec_result.output.decode().splitlines()
+            return [f"{directory.rstrip('/')}/{f}" for f in files]
+        except Exception as e:
+            logger.error(f"Failed to list files in container {container_id}: {e}")
+            return []
+
+    def get_file_link(self, container_id: str, file_path: str) -> str:
+        """Return the full API link to download a file from a container, using config.BASE_URL if available."""
+        base_url = getattr(config, "BASE_URL", None) or "http://localhost:8000"
+        return f"{base_url}/sandbox/file?container_id={container_id}&file_path={file_path}"
     
     def execute_python_code(self, container_id: str, code: str) -> Dict[str, Any]:
         """Execute Python code in a Docker container"""
@@ -258,16 +260,13 @@ class DockerManager:
         if error:
             return error
         
-        # Force check and delete expired files before execution
-        check_and_delete_files()
-        
         # Log execution details
         logger.info("Executing code:")
         logger.info("=" * 50)
         logger.info(code)
         logger.info("=" * 50)
         logger.info(f"Running code in container {container_id}")
-        
+
         try:
             with self._get_running_container(container_id) as container:
                 # Write Python code to a temporary file, then execute that file in the container
@@ -325,9 +324,9 @@ class DockerManager:
                     logger.warning("Stderr:")
                     logger.warning(stderr)
                 
-                # Collect output files - pass container_id for file safety
-                files, file_links = collect_output_files(container_id, self.container_last_used)
-                
+                files = self.list_files_in_container(container_id, "/app/results")
+                file_links = [self.get_file_link(container_id, f) for f in files]
+
                 return {
                     "stdout": stdout,
                     "stderr": stderr,
@@ -601,26 +600,3 @@ class DockerManager:
             status["elapsed_seconds"] = elapsed_time.total_seconds()
         
         return status
-    
-    def cleanup_old_containers(self) -> int:
-        """Clean up containers that haven't been used for specified time, return number of cleaned containers"""
-        cutoff_time = datetime.now() - timedelta(hours=self.cleanup_after_hours)
-        containers_to_remove = [container_id for container_id, last_used in self.container_last_used.items() 
-                              if last_used < cutoff_time]
-        
-        for container_id in containers_to_remove:
-            try:
-                container = self.docker_client.containers.get(container_id)
-                # Stop and remove container
-                container.stop(timeout=5)
-                container.remove(force=True)
-                logger.info(f"Cleaned up inactive container: {container_id}")
-            except docker.errors.NotFound:
-                logger.info(f"Container {container_id} already removed")
-            except Exception as e:
-                logger.error(f"Failed to clean up container {container_id}: {e}")
-            
-            # Clean up records and associated files
-            self._clean_stale_container_records(container_id)
-        
-        return len(containers_to_remove) 
