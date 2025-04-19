@@ -235,15 +235,27 @@ class DockerManager:
             logger.error(f"Container {container_id} not found during operation.")
             raise ValueError(f"Container {container_id} not found.")
     
-    def list_files_in_container(self, container_id: str, directory: str = "/app/results") -> list:
-        """List files in a directory inside the container."""
+    def list_files_in_container(self, container_id: str, directory: str = "/app/results", with_stat: bool = False) -> list:
+        """List files in a directory inside the container. If with_stat=True, return (filename, ctime) tuples."""
         try:
             container = self.docker_client.containers.get(container_id)
             exec_result = container.exec_run(f"ls -1 {directory}")
             if exec_result.exit_code != 0:
                 return []
             files = exec_result.output.decode().splitlines()
-            return [f"{directory.rstrip('/')}/{f}" for f in files]
+            full_paths = [f"{directory.rstrip('/')}/{f}" for f in files]
+            if with_stat:
+                # Get ctime for each file
+                stat_files = []
+                for f in full_paths:
+                    stat_result = container.exec_run(f'stat -c "%n|%Z" "{f}"')
+                    if stat_result.exit_code == 0:
+                        parts = stat_result.output.decode().strip().split("|", 1)
+                        if len(parts) == 2:
+                            stat_files.append((parts[0], int(parts[1])))
+                return stat_files
+            else:
+                return full_paths
         except Exception as e:
             logger.error(f"Failed to list files in container {container_id}: {e}")
             return []
@@ -254,13 +266,15 @@ class DockerManager:
         return f"{base_url}/sandbox/file?container_id={container_id}&file_path={file_path}"
     
     def execute_python_code(self, container_id: str, code: str) -> Dict[str, Any]:
-        """Execute Python code in a Docker container"""
-        # Verify container exists
+        """Execute Python code in a Docker container and return files created/modified after start time."""
         error = self.verify_container_exists(container_id)
         if error:
             return error
-        
-        # Log execution details
+
+        # Get current timestamp, only return files with ctime >= start_ts
+        import time
+        start_ts = int(time.time())
+
         logger.info("Executing code:")
         logger.info("=" * 50)
         logger.info(code)
@@ -314,6 +328,11 @@ class DockerManager:
                     privileged=False
                 )
                 
+                # Get all files and their ctime after execution
+                all_files = self.list_files_in_container(container_id, with_stat=True)
+                new_files = [f for f, ctime in all_files if ctime >= start_ts]
+                file_links = [self.get_file_link(container_id, f) for f in new_files]
+                
                 # Log execution results
                 logger.info("Execution results:")
                 logger.info(f"Exit code: {exit_code}")
@@ -324,14 +343,11 @@ class DockerManager:
                     logger.warning("Stderr:")
                     logger.warning(stderr)
                 
-                files = self.list_files_in_container(container_id, "/app/results")
-                file_links = [self.get_file_link(container_id, f) for f in files]
-
                 return {
                     "stdout": stdout,
                     "stderr": stderr,
                     "exit_code": exit_code,
-                    "files": files,
+                    "files": new_files,
                     "file_links": file_links
                 }
         except ValueError as e:
@@ -600,3 +616,19 @@ class DockerManager:
             status["elapsed_seconds"] = elapsed_time.total_seconds()
         
         return status
+    
+    def list_containers(self) -> list:
+        """List all containers managed by this service (with label python-sandbox)."""
+        containers = self.docker_client.containers.list(all=True, filters={"label": "python-sandbox"})
+        result = []
+        for c in containers:
+            info = {
+                "container_id": c.id,
+                "name": c.name,
+                "status": c.status,
+                "image": c.image.tags[0] if c.image.tags else str(c.image.id),
+                "created": c.attrs.get("Created"),
+                "last_used": self.container_last_used.get(c.id),
+            }
+            result.append(info)
+        return result

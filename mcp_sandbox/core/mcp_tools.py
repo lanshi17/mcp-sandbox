@@ -9,7 +9,7 @@ class MCPTools:
     
     def __init__(self, base_image: str = DEFAULT_DOCKER_IMAGE):
         self.docker_manager = DockerManager(base_image=base_image)
-        self.mcp = FastMCP("Python Docker Executor 🐳")
+        self.mcp = FastMCP("Python Docker Executor ")
         self._register_mcp_tools()
     
     def _register_mcp_tools(self):
@@ -75,3 +75,14 @@ class MCPTools:
             Returns the current status of the package installation (success, installing, failed)
             """
             return self.docker_manager.check_package_status(container_id, package_name)
+
+        @self.mcp.tool(
+            name="list_python_envs",
+            description="Lists all existing Python Docker containers (sandboxes) and their status."
+        )
+        def list_python_envs() -> list:
+            """
+            Return a list of all existing Python Docker containers (sandboxes) managed by this service.
+            Each item includes container_id, status, image, created, and last_used time if available.
+            """
+            return self.docker_manager.list_containers()

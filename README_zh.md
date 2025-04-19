@@ -36,9 +36,10 @@ python main.py
 ### 可用工具
 
 1. **create_python_env**：创建一个新的Python Docker容器，并返回其ID，用于后续的代码执行和包安装
-2. **execute_python_code**：在指定的Docker容器中执行Python代码
-3. **install_package_in_env**：在指定的Docker容器中安装Python包
-4. **check_package_status**：检查Docker容器中包的安装状态
+2. **list_python_envs**：列出所有已存在的沙盒环境（Docker容器），可复用已有的container_id
+3. **execute_python_code**：在指定的Docker容器中执行Python代码
+4. **install_package_in_env**：在指定的Docker容器中安装Python包
+5. **check_package_status**：检查Docker容器中包的安装状态
 
 ## 项目结构
 
@@ -71,8 +72,10 @@ python-mcp-sandbox/
 ```
 我已为你配置了一个Python代码执行环境。你可以按照以下步骤运行Python代码：
 
-1. 首先，使用"create_python_env"工具创建虚拟环境
-   - 这将返回一个container_id，你将需要它用于后续操作
+1. 首先，使用"list_python_envs"工具查看所有已存在的沙盒环境（Docker容器）。
+   - 你可以复用已有的container_id，或根据需要新建。
+   - 如需新建沙盒，请使用"create_python_env"工具。
+   - 每个沙盒都是独立的Python环境，container_id是后续所有操作的必需参数。
 
 2. 如果需要安装包，使用"install_package_in_env"工具
    - 参数：container_id和package_name（例如，numpy, pandas）
@@ -85,18 +88,19 @@ python-mcp-sandbox/
 4. 使用"execute_python_code"工具运行代码
    - 参数：container_id和code（Python代码）
    - 返回输出、错误和任何生成文件的链接
+   - 所有生成的文件都存储在沙盒容器内，file_links字段为直接HTTP链接，可下载或浏览器内直接查看
 
 工作流示例：
-- 使用create_python_env → 获取container_id
+- 先用list_python_envs查看可用沙盒，或用create_python_env新建 → 获取container_id
 - 使用install_package_in_env安装必要的包（如pandas、matplotlib），带container_id参数
 - 使用check_package_status验证包安装，带相同的container_id参数
 - 使用execute_python_code运行代码，带container_id参数
-- 查看执行结果和生成的文件链接
+- 查看执行结果和生成文件的HTTP链接（如 /sandbox/file?... 可直接打开或嵌入）
 
-代码执行发生在安全的沙盒环境中。生成的文件（图像、CSV等）将自动提供下载链接。
+代码执行发生在安全的沙盒环境中。生成的文件（图像、CSV等）会作为HTTP链接提供，可直接浏览器访问或嵌入，无需下载。
 
-记得不要在Python代码中直接显示图像。对于可视化：
-- 保存图形到文件使用plt.savefig()而不是plt.show()
-- 对于数据，使用如df.to_csv()或df.to_excel()方法保存为文件
-- 所有保存的文件将自动作为下载链接出现在结果中
+注意不要在Python代码中直接使用plt.show()。对于可视化：
+- 保存图形到文件请用plt.savefig()，不要用plt.show()
+- 数据请用df.to_csv()、df.to_excel()等方法保存为文件
+- 所有保存的文件都会自动作为HTTP链接出现在结果中，可直接打开或嵌入。
 ``` 
