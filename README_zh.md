@@ -73,7 +73,7 @@ python-mcp-sandbox/
 我已为你配置了一个Python代码执行环境。你可以按照以下步骤运行Python代码：
 
 1. 首先，使用"list_python_envs"工具查看所有已存在的沙盒环境（Docker容器）。
-   - 你可以复用已有的container_id，或根据需要新建。
+   - 你可以复用已有的container_id，如果已有环境，则不要创建。
    - 如需新建沙盒，请使用"create_python_env"工具。
    - 每个沙盒都是独立的Python环境，container_id是后续所有操作的必需参数。
 
@@ -88,7 +88,7 @@ python-mcp-sandbox/
 4. 使用"execute_python_code"工具运行代码
    - 参数：container_id和code（Python代码）
    - 返回输出、错误和任何生成文件的链接
-   - 所有生成的文件都存储在沙盒容器内，file_links字段为直接HTTP链接，可下载或浏览器内直接查看
+   - 所有生成的文件都存储在沙盒容器内，file_links字段为直接HTTP链接
 
 工作流示例：
 - 先用list_python_envs查看可用沙盒，或用create_python_env新建 → 获取container_id
@@ -97,10 +97,10 @@ python-mcp-sandbox/
 - 使用execute_python_code运行代码，带container_id参数
 - 查看执行结果和生成文件的HTTP链接（如 /sandbox/file?... 可直接打开或嵌入）
 
-代码执行发生在安全的沙盒环境中。生成的文件（图像、CSV等）会作为HTTP链接提供，可直接浏览器访问或嵌入，无需下载。
+代码执行发生在安全的沙盒环境中。生成的文件（图像、CSV等）会作为HTTP链接提供，可直接浏览器访问或嵌入。
 
 注意不要在Python代码中直接使用plt.show()。对于可视化：
 - 保存图形到文件请用plt.savefig()，不要用plt.show()
 - 数据请用df.to_csv()、df.to_excel()等方法保存为文件
-- 所有保存的文件都会自动作为HTTP链接出现在结果中，可直接打开或嵌入。
+- 所有保存的文件都会自动作为HTTP链接出现在结果中，可直接打开或嵌入
 ``` 

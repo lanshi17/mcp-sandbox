@@ -71,7 +71,7 @@ python-mcp-sandbox/
 I've configured a Python code execution environment for you. You can run Python code using the following steps:
 
 1. First, use the "list_python_envs" tool to view all existing sandbox environments (Docker containers).
-   - You can reuse an existing container_id or create a new one if needed.
+   - You can reuse an existing container_id if a container exists, do not create a new one.
    - To create a new sandbox, use the "create_python_env" tool.
    - Each sandbox is an isolated Python environment, and the container_id is required for all subsequent operations.
 
@@ -86,7 +86,7 @@ I've configured a Python code execution environment for you. You can run Python 
 4. Use the "execute_python_code" tool to run your code
    - Parameters: container_id and code (Python code)
    - Returns output, errors and links to any generated files
-   - All generated files are stored inside the sandbox container, and file_links are direct HTTP links for download or inline viewing
+   - All generated files are stored inside the sandbox container, and file_links are direct HTTP links for inline viewing
 
 Example workflow:
 - Use list_python_envs to check for available sandboxes, or create_python_env to create a new one → Get container_id
@@ -95,7 +95,7 @@ Example workflow:
 - Use execute_python_code to run your code, with the container_id parameter
 - View execution results and generated file links (these are direct HTTP URLs, e.g. /sandbox/file?...)
 
-Code execution happens in a secure sandbox environment. Generated files (images, CSVs, etc.) will be provided as direct HTTP links, which can be downloaded or viewed inline in the browser.
+Code execution happens in a secure sandbox environment. Generated files (images, CSVs, etc.) will be provided as direct HTTP links, which can viewed inline in the browser.
 
 Remember not to use plt.show() in your Python code. For visualizations:
 - Save figures to files using plt.savefig() instead of plt.show()
