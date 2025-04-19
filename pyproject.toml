@@ -1,7 +1,7 @@
 [project]
-name = "python-mcp-sandbox"
+name = "mcp-sandbox"
 version = "0.1.0"
-description = "Interactive Python code execution environment with isolated virtual environments"
+description = "Safe sandboxes for llms"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

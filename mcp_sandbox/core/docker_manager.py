@@ -1,9 +1,10 @@
 import uuid
+import re
 import docker
 import threading
 import json
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional, Any
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,13 +12,12 @@ from pathlib import Path
 from mcp_sandbox.utils.config import logger, DEFAULT_DOCKER_IMAGE, config
 
 class DockerManager:
-    """Manage Docker containers with automatic creation and cleanup"""
+    """Manage Docker sandboxes with automatic creation"""
     
-    def __init__(self, base_image: str = DEFAULT_DOCKER_IMAGE, cleanup_after_hours: int = 1):
+    def __init__(self, base_image: str = DEFAULT_DOCKER_IMAGE):
         self.base_image = base_image
-        self.cleanup_after_hours = cleanup_after_hours
-        self.container_last_used: Dict[str, datetime] = {}
-        self.session_container_map: Dict[str, str] = {}
+        self.sandbox_last_used: Dict[str, datetime] = {}
+        self.session_sandbox_map: Dict[str, str] = {}
         self.package_install_status: Dict[str, Dict[str, Any]] = {}
         
         # Initialize Docker client
@@ -31,8 +31,8 @@ class DockerManager:
         # Try to build our own image if needed
         self._ensure_docker_image()
         
-        # Load existing containers
-        self._load_container_records()
+        # Load existing sandboxes
+        self._load_sandbox_records()
         
         logger.info(f"DockerManager initialized, using base image: {self.base_image}")
     
@@ -128,48 +128,46 @@ class DockerManager:
             logger.error(f"Error reading file for hashing: {e}")
             return ""
     
-    def _load_container_records(self) -> None:
-        """Load existing container usage records"""
+    def _load_sandbox_records(self) -> None:
+        """Load existing sandbox usage records"""
         try:
-            containers = self.docker_client.containers.list(all=True, filters={"label": "python-sandbox"})
-            for container in containers:
-                container_id = container.id
-                # Set last used time of existing containers to 23 hours ago
-                # So they will be deleted in the next cleanup if not used
-                self.container_last_used[container_id] = datetime.now() - timedelta(hours=23)
-                logger.info(f"Loaded existing container: {container_id}")
+            sandboxes = self.docker_client.containers.list(all=True, filters={"label": "python-sandbox"})
+            for sandbox in sandboxes:
+                sandbox_id = sandbox.id
+                self.sandbox_last_used[sandbox_id] = datetime.now()
+                logger.info(f"Loaded existing sandbox: {sandbox_id}")
         except Exception as e:
-            logger.error(f"Failed to load existing containers: {e}", exc_info=True)
+            logger.error(f"Failed to load existing sandboxes: {e}", exc_info=True)
     
-    def get_container_for_session(self, session_id: str) -> str:
-        """Get container ID for a session, create new one if not exists"""
-        if session_id in self.session_container_map:
-            container_id = self.session_container_map[session_id]
-            # Check if container still exists
+    def get_sandbox_for_session(self, session_id: str) -> str:
+        """Get sandbox ID for a session, create new one if not exists"""
+        if session_id in self.session_sandbox_map:
+            sandbox_id = self.session_sandbox_map[session_id]
+            # Check if sandbox still exists
             try:
-                self.docker_client.containers.get(container_id)
-                self.container_last_used[container_id] = datetime.now()
-                logger.info(f"Session {session_id} using existing container {container_id}")
-                return container_id
+                self.docker_client.containers.get(sandbox_id)
+                self.sandbox_last_used[sandbox_id] = datetime.now()
+                logger.info(f"Session {session_id} using existing sandbox {sandbox_id}")
+                return sandbox_id
             except docker.errors.NotFound:
-                logger.info(f"Container {container_id} for session {session_id} not found, creating new one")
+                logger.info(f"Sandbox {sandbox_id} for session {session_id} not found, creating new one")
                 pass
         
-        # Create new container
-        container_id = self.create_container()
-        self.session_container_map[session_id] = container_id
-        logger.info(f"Created new container {container_id} for session {session_id}")
-        return container_id
+        # Create new sandbox
+        sandbox_id = self.create_sandbox()
+        self.session_sandbox_map[session_id] = sandbox_id
+        logger.info(f"Created new sandbox {sandbox_id} for session {session_id}")
+        return sandbox_id
     
-    def create_container(self) -> str:
-        """Create a new Docker container and return its ID"""
-        container_name = f"python-sandbox-{str(uuid.uuid4())[:8]}"
+    def create_sandbox(self) -> str:
+        """Create a new Docker sandbox and return its ID"""
+        sandbox_name = f"python-sandbox-{str(uuid.uuid4())[:8]}"
         
         try:
-            # Create container with proper security constraints
-            container = self.docker_client.containers.create(
+            # Create sandbox with proper security constraints
+            sandbox = self.docker_client.containers.create(
                 image=self.base_image,
-                name=container_name,
+                name=sandbox_name,
                 detach=True,
                 working_dir='/app/results',
                 labels={"python-sandbox": "true"},
@@ -182,64 +180,64 @@ class DockerManager:
                 security_opt=['no-new-privileges'],
             )
             
-            # Start container
-            container.start()
+            # Start sandbox
+            sandbox.start()
             
-            container_id = container.id
-            self.container_last_used[container_id] = datetime.now()
-            logger.info(f"Created new container: {container_id} (name: {container_name})")
-            return container_id
+            sandbox_id = sandbox.id
+            self.sandbox_last_used[sandbox_id] = datetime.now()
+            logger.info(f"Created new sandbox: {sandbox_id} (name: {sandbox_name})")
+            return sandbox_id
         except Exception as e:
-            logger.error(f"Failed to create container: {e}", exc_info=True)
+            logger.error(f"Failed to create sandbox: {e}", exc_info=True)
             raise
     
-    def verify_container_exists(self, container_id: str) -> Optional[Dict[str, Any]]:
-        """Verify container exists and clean up if not. Returns error dict if not exists."""
-        if container_id not in self.container_last_used:
-            return {"error": True, "message": f"Container not found: {container_id}"}
+    def verify_sandbox_exists(self, sandbox_id: str) -> Optional[Dict[str, Any]]:
+        """Verify sandbox exists and clean up if not. Returns error dict if not exists."""
+        if sandbox_id not in self.sandbox_last_used:
+            return {"error": True, "message": f"Sandbox not found: {sandbox_id}"}
         try:
-            self.docker_client.containers.get(container_id)
-            self.container_last_used[container_id] = datetime.now()
+            self.docker_client.containers.get(sandbox_id)
+            self.sandbox_last_used[sandbox_id] = datetime.now()
             return None
         except docker.errors.NotFound as e:
-            return {"error": True, "message": str(e) or f"Container not found: {container_id}"}
+            return {"error": True, "message": str(e) or f"Sandbox not found: {sandbox_id}"}
     
     
     @contextmanager
-    def _get_running_container(self, container_id: str):
-        """Context manager to get a running container, with auto-restart if needed"""
+    def _get_running_sandbox(self, sandbox_id: str):
+        """Context manager to get a running sandbox, with auto-restart if needed"""
         try:
-            container = self.docker_client.containers.get(container_id)
+            sandbox = self.docker_client.containers.get(sandbox_id)
             
-            # Ensure container is running
-            if container.status != "running":
-                logger.info(f"Container {container_id} is not running. Current status: {container.status}")
+            # Ensure sandbox is running
+            if sandbox.status != "running":
+                logger.info(f"Sandbox {sandbox_id} is not running. Current status: {sandbox.status}")
                 
-                # If container status is exited, try to get container logs to understand why
-                if container.status == "exited":
+                # If sandbox status is exited, try to get sandbox logs to understand why
+                if sandbox.status == "exited":
                     try:
-                        logs = container.logs().decode('utf-8', errors='replace')
-                        logger.warning(f"Container {container_id} exited. Container logs: {logs}")
+                        logs = sandbox.logs().decode('utf-8', errors='replace')
+                        logger.warning(f"Sandbox {sandbox_id} exited. Sandbox logs: {logs}")
                     except Exception as log_err:
-                        logger.error(f"Failed to get logs for exited container {container_id}: {log_err}")
+                        logger.error(f"Failed to get logs for exited sandbox {sandbox_id}: {log_err}")
                 
-                # Try to start the container
-                logger.info(f"Attempting to start container {container_id}...")
-                container.start()
-                container.reload()
-                logger.info(f"Container {container_id} started successfully.")
+                # Try to start the sandbox
+                logger.info(f"Attempting to start sandbox {sandbox_id}...")
+                sandbox.start()
+                sandbox.reload()
+                logger.info(f"Sandbox {sandbox_id} started successfully.")
             
-            yield container
+            yield sandbox
             
         except docker.errors.NotFound:
-            logger.error(f"Container {container_id} not found during operation.")
-            raise ValueError(f"Container {container_id} not found.")
+            logger.error(f"Sandbox {sandbox_id} not found during operation.")
+            raise ValueError(f"Sandbox {sandbox_id} not found.")
     
-    def list_files_in_container(self, container_id: str, directory: str = "/app/results", with_stat: bool = False) -> list:
-        """List files in a directory inside the container. If with_stat=True, return (filename, ctime) tuples."""
+    def list_files_in_sandbox(self, sandbox_id: str, directory: str = "/app/results", with_stat: bool = False) -> list:
+        """List files in a directory inside the sandbox. If with_stat=True, return (filename, ctime) tuples."""
         try:
-            container = self.docker_client.containers.get(container_id)
-            exec_result = container.exec_run(f"ls -1 {directory}")
+            sandbox = self.docker_client.containers.get(sandbox_id)
+            exec_result = sandbox.exec_run(f"ls -1 {directory}")
             if exec_result.exit_code != 0:
                 return []
             files = exec_result.output.decode().splitlines()
@@ -248,7 +246,7 @@ class DockerManager:
                 # Get ctime for each file
                 stat_files = []
                 for f in full_paths:
-                    stat_result = container.exec_run(f'stat -c "%n|%Z" "{f}"')
+                    stat_result = sandbox.exec_run(f'stat -c "%n|%Z" "{f}"')
                     if stat_result.exit_code == 0:
                         parts = stat_result.output.decode().strip().split("|", 1)
                         if len(parts) == 2:
@@ -257,17 +255,17 @@ class DockerManager:
             else:
                 return full_paths
         except Exception as e:
-            logger.error(f"Failed to list files in container {container_id}: {e}")
+            logger.error(f"Failed to list files in sandbox {sandbox_id}: {e}")
             return []
 
-    def get_file_link(self, container_id: str, file_path: str) -> str:
-        """Return the full API link to download a file from a container, using config.BASE_URL if available."""
+    def get_file_link(self, sandbox_id: str, file_path: str) -> str:
+        """Return the full API link to download a file from a sandbox, using config.BASE_URL if available."""
         base_url = getattr(config, "BASE_URL", None) or "http://localhost:8000"
-        return f"{base_url}/sandbox/file?container_id={container_id}&file_path={file_path}"
+        return f"{base_url}/sandbox/file?sandbox_id={sandbox_id}&file_path={file_path}"
     
-    def execute_python_code(self, container_id: str, code: str) -> Dict[str, Any]:
-        """Execute Python code in a Docker container and return files created/modified after start time."""
-        error = self.verify_container_exists(container_id)
+    def execute_python_code(self, sandbox_id: str, code: str) -> Dict[str, Any]:
+        """Execute Python code in a Docker sandbox and return files created/modified after start time."""
+        error = self.verify_sandbox_exists(sandbox_id)
         if error:
             return error
 
@@ -279,24 +277,24 @@ class DockerManager:
         logger.info("=" * 50)
         logger.info(code)
         logger.info("=" * 50)
-        logger.info(f"Running code in container {container_id}")
+        logger.info(f"Running code in sandbox {sandbox_id}")
 
         try:
-            with self._get_running_container(container_id) as container:
-                # Write Python code to a temporary file, then execute that file in the container
+            with self._get_running_sandbox(sandbox_id) as sandbox:
+                # Write Python code to a temporary file, then execute that file in the sandbox
                 # This avoids issues with quotes and special characters in command line
                 temp_code_file = "/tmp/code_to_run.py"
                 
-                # 1. Write the code to a temporary file inside the container
+                # 1. Write the code to a temporary file inside the sandbox
                 write_code_cmd = f"cat > {temp_code_file} << 'EOL'\n{code}\nEOL"
-                write_result = container.exec_run(
+                write_result = sandbox.exec_run(
                     cmd=["sh", "-c", write_code_cmd],
                     workdir="/app/results",
                     privileged=False
                 )
                 
                 if write_result.exit_code != 0:
-                    logger.error(f"Failed to write code to container: {write_result.output.decode('utf-8')}")
+                    logger.error(f"Failed to write code to sandbox: {write_result.output.decode('utf-8')}")
                     return {
                         "error": "Failed to prepare code execution",
                         "stdout": "",
@@ -307,7 +305,7 @@ class DockerManager:
                     }
                 
                 # 2. Execute the code from the temporary file
-                exec_result = container.exec_run(
+                exec_result = sandbox.exec_run(
                     cmd=["python", temp_code_file],
                     workdir="/app/results",
                     stdout=True,
@@ -323,15 +321,15 @@ class DockerManager:
                 stderr = stderr_bytes.decode('utf-8') if stderr_bytes else ""
                 
                 # 3. Remove the temporary file
-                container.exec_run(
+                sandbox.exec_run(
                     cmd=["rm", "-f", temp_code_file],
                     privileged=False
                 )
                 
                 # Get all files and their ctime after execution
-                all_files = self.list_files_in_container(container_id, with_stat=True)
+                all_files = self.list_files_in_sandbox(sandbox_id, with_stat=True)
                 new_files = [f for f, ctime in all_files if ctime >= start_ts]
-                file_links = [self.get_file_link(container_id, f) for f in new_files]
+                file_links = [self.get_file_link(sandbox_id, f) for f in new_files]
                 
                 # Log execution results
                 logger.info("Execution results:")
@@ -351,7 +349,7 @@ class DockerManager:
                     "file_links": file_links
                 }
         except ValueError as e:
-            # Container not found error from context manager
+            # Sandbox not found error from context manager
             return {
                 "error": str(e),
                 "stdout": "",
@@ -361,7 +359,7 @@ class DockerManager:
                 "file_links": []
             }
         except Exception as e:
-            logger.error(f"Failed to run code in container {container_id}: {e}", exc_info=True)
+            logger.error(f"Failed to run code in sandbox {sandbox_id}: {e}", exc_info=True)
             
             # Try to capture detailed error information
             error_message = str(e)
@@ -385,16 +383,16 @@ class DockerManager:
         except Exception:
             return ""
 
-    def _install_package_sync(self, container_id: str, package_name: str) -> Dict[str, Any]:
+    def _install_package_sync(self, sandbox_id: str, package_name: str) -> Dict[str, Any]:
         """Synchronously install package and return result"""
-        status_key = f"{container_id}:{package_name}"
+        status_key = f"{sandbox_id}:{package_name}"
         
         try:
-            with self._get_running_container(container_id) as container:
+            with self._get_running_sandbox(sandbox_id) as sandbox:
                 # Activate venv and install package
                 pip_index_url = self._get_pip_index_url()
                 pip_index_opt = f" --index-url {pip_index_url}" if pip_index_url else ""
-                exec_result = container.exec_run(
+                exec_result = sandbox.exec_run(
                     cmd=f"uv pip install{pip_index_opt} {package_name}",
                     stdout=True,
                     stderr=True,
@@ -431,7 +429,7 @@ class DockerManager:
                     self.package_install_status[status_key] = status
                     return status
         except Exception as e:
-            logger.error(f"Failed to install package {package_name} for container {container_id}: {e}", exc_info=True)
+            logger.error(f"Failed to install package {package_name} for sandbox {sandbox_id}: {e}", exc_info=True)
             
             # Get more detailed error information
             error_message = str(e)
@@ -450,15 +448,15 @@ class DockerManager:
             self.package_install_status[status_key] = status
             return status
     
-    def install_package(self, container_id: str, package_name: str) -> Dict[str, Any]:
+    def install_package(self, sandbox_id: str, package_name: str) -> Dict[str, Any]:
         """Install package, directly return success if completes within 5 seconds"""
-        # Verify container exists
-        error = self.verify_container_exists(container_id)
+        # Verify sandbox exists
+        error = self.verify_sandbox_exists(sandbox_id)
         if error:
             return error
         
-        logger.info(f"Starting installation of package {package_name} for container {container_id}")
-        status_key = f"{container_id}:{package_name}"
+        logger.info(f"Starting installation of package {package_name} for sandbox {sandbox_id}")
+        status_key = f"{sandbox_id}:{package_name}"
         
         # Check if already installing
         if status_key in self.package_install_status:
@@ -481,7 +479,7 @@ class DockerManager:
         # Create and start installation in a separate thread that we'll monitor
         install_thread = threading.Thread(
             target=self._install_package_sync,
-            args=(container_id, package_name),
+            args=(sandbox_id, package_name),
             daemon=True
         )
         install_thread.start()
@@ -523,14 +521,14 @@ class DockerManager:
                 "message": f"Installation of {package_name} in progress. Use check_package_status to monitor progress."
             }
     
-    def check_package_status(self, container_id: str, package_name: str) -> Dict[str, Any]:
+    def check_package_status(self, sandbox_id: str, package_name: str) -> Dict[str, Any]:
         """Check the installation status of a package"""
-        # Verify container exists
-        error = self.verify_container_exists(container_id)
+        # Verify sandbox exists
+        error = self.verify_sandbox_exists(sandbox_id)
         if error:
             return error
         
-        status_key = f"{container_id}:{package_name}"
+        status_key = f"{sandbox_id}:{package_name}"
         
         # If we have a record and it's complete, return it immediately
         if status_key in self.package_install_status:
@@ -573,9 +571,9 @@ class DockerManager:
         if status_key not in self.package_install_status:
             # Check if package is already installed (might have been installed without tracking)
             try:
-                with self._get_running_container(container_id) as container:
+                with self._get_running_sandbox(sandbox_id) as sandbox:
                     # Use pip list and filter results to check if package is installed
-                    exec_result = container.exec_run(
+                    exec_result = sandbox.exec_run(
                         cmd=f"uv pip list | grep -i {package_name}",
                         stdout=True,
                         stderr=True,
@@ -617,18 +615,39 @@ class DockerManager:
         
         return status
     
-    def list_containers(self) -> list:
-        """List all containers managed by this service (with label python-sandbox)."""
-        containers = self.docker_client.containers.list(all=True, filters={"label": "python-sandbox"})
-        result = []
-        for c in containers:
-            info = {
-                "container_id": c.id,
-                "name": c.name,
-                "status": c.status,
-                "image": c.image.tags[0] if c.image.tags else str(c.image.id),
-                "created": c.attrs.get("Created"),
-                "last_used": self.container_last_used.get(c.id),
+    def list_sandboxes(self) -> list:
+        """List all Docker sandboxes managed by this service (with label python-sandbox)."""
+        sandboxes = []
+        for sandbox in self.docker_client.containers.list(all=True, filters={"label": "python-sandbox"}):
+            sandbox_info = {
+                "sandbox_id": sandbox.id,
+                "name": sandbox.name,
+                "status": sandbox.status,
+                "image": sandbox.image.tags[0] if sandbox.image.tags else sandbox.image.short_id,
+                "created": sandbox.attrs["Created"],
+                "last_used": self.sandbox_last_used.get(sandbox.id),
             }
-            result.append(info)
-        return result
+            sandboxes.append(sandbox_info)
+        return sandboxes
+    
+    def list_installed_packages(self, sandbox_id: str) -> list:
+        """Return a list of installed Python packages in the given sandbox, robustly parsing uv output."""
+        try:
+            sandbox = self.docker_client.containers.get(sandbox_id)
+            exec_result = sandbox.exec_run('uv pip list --format=json')
+            output = exec_result.output.decode()
+            # Extract the first JSON array from the output
+            match = re.search(r'\[.*\]', output, re.DOTALL)
+            if match:
+                json_str = match.group(0)
+                try:
+                    return json.loads(json_str)
+                except Exception as parse_err:
+                    logger.error(f"[list_installed_packages] JSON parse error: {parse_err} | json_str={json_str!r}")
+                    return []
+            else:
+                logger.warning(f"[list_installed_packages] No JSON array found in output: {output!r}")
+                return []
+        except Exception as e:
+            logger.error(f"[list_installed_packages] Error listing packages in {sandbox_id}: {e}", exc_info=True)
+            return []

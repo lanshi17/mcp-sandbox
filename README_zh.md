@@ -35,11 +35,11 @@ python main.py
 
 ### 可用工具
 
-1. **create_python_env**：创建一个新的Python Docker容器，并返回其ID，用于后续的代码执行和包安装
-2. **list_python_envs**：列出所有已存在的沙盒环境（Docker容器），可复用已有的container_id
-3. **execute_python_code**：在指定的Docker容器中执行Python代码
-4. **install_package_in_env**：在指定的Docker容器中安装Python包
-5. **check_package_status**：检查Docker容器中包的安装状态
+1. **create_sandbox**：创建一个新的Python Docker沙盒，并返回其ID，用于后续的代码执行和包安装
+2. **list_sandboxes**：列出所有已存在的沙盒（Docker容器），可复用已有的sandbox_id
+3. **execute_python_code**：在指定的Docker沙盒中执行Python代码
+4. **install_package_in_sandbox**：在指定的Docker沙盒中安装Python包
+5. **check_package_status**：检查Docker沙盒中包的安装状态
 
 ## 项目结构
 
@@ -70,34 +70,33 @@ python-mcp-sandbox/
 ## 示例提示词
 
 ```
-我已为你配置了一个Python代码执行环境。你可以按照以下步骤运行Python代码：
+我已为你配置了一个Python代码执行沙盒。你可以按照以下步骤运行Python代码：
 
-1. 首先，使用"list_python_envs"工具查看所有已存在的沙盒环境（Docker容器）。
-   - 你可以复用已有的container_id，如果已有环境，则不要创建。
-   - 如需新建沙盒，请使用"create_python_env"工具。
-   - 每个沙盒都是独立的Python环境，container_id是后续所有操作的必需参数。
+1. 首先，使用"list_sandboxes"工具查看所有已存在的沙盒（Docker容器）。
+   - 你可以复用已有的sandbox_id，如果已有沙盒，则不要创建。
+   - 如需新建沙盒，请使用"create_sandbox"工具。
+   - 每个沙盒都是独立的Python环境，sandbox_id是后续所有操作的必需参数。
 
-2. 如果需要安装包，使用"install_package_in_env"工具
-   - 参数：container_id和package_name（例如，numpy, pandas）
-   - 这会启动异步安装并立即返回状态
+2. 如果需要安装包，使用"install_package_in_sandbox"工具
+   - 参数：sandbox_id和package_name（例如，numpy, pandas）
+   - 这会启动异步安装，并立即返回状态
 
-3. 安装包后，可以使用"check_package_status"工具检查它们的安装状态
-   - 参数：container_id和package_name（要检查的包的名称）
+3. 安装包后，你可以使用"check_package_status"工具检查其安装状态
+   - 参数：sandbox_id和package_name（要检查的包名）
    - 如果包仍在安装中，你需要使用此工具再次检查
 
 4. 使用"execute_python_code"工具运行代码
-   - 参数：container_id和code（Python代码）
+   - 参数：sandbox_id和code（Python代码）
    - 返回输出、错误和任何生成文件的链接
-   - 所有生成的文件都存储在沙盒容器内，file_links字段为直接HTTP链接
+   - 所有生成的文件都存储在沙盒内，file_links字段为直接HTTP链接
 
 工作流示例：
-- 先用list_python_envs查看可用沙盒，或用create_python_env新建 → 获取container_id
-- 使用install_package_in_env安装必要的包（如pandas、matplotlib），带container_id参数
-- 使用check_package_status验证包安装，带相同的container_id参数
-- 使用execute_python_code运行代码，带container_id参数
-- 查看执行结果和生成文件的HTTP链接（如 /sandbox/file?... 可直接打开或嵌入）
+- 先用list_sandboxes查看可用沙盒，或用create_sandbox新建 → 获取sandbox_id
+- 使用install_package_in_sandbox安装必要的包（如pandas、matplotlib），带sandbox_id参数
+- 使用check_package_status验证包安装，带相同的sandbox_id参数
+- 使用execute_python_code运行代码，带sandbox_id参数
 
-代码执行发生在安全的沙盒环境中。生成的文件（图像、CSV等）会作为HTTP链接提供，可直接浏览器访问或嵌入。
+代码执行发生在安全的沙盒中。生成的文件（图像、CSV等）会作为HTTP链接提供，可直接浏览器访问或嵌入，无需下载。
 
 注意不要在Python代码中直接使用plt.show()。对于可视化：
 - 保存图形到文件请用plt.savefig()，不要用plt.show()
