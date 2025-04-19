@@ -21,4 +21,7 @@ build_info_file = ".docker_build_info"
 # Logging configuration
 level = "INFO"
 format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-log_file = "mcp_sandbox.log" 
+log_file = "mcp_sandbox.log"
+
+# PyPI index url for pip install
+pypi_index_url = "https://pypi.tuna.tsinghua.edu.cn/simple"

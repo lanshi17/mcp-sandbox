@@ -42,7 +42,7 @@ class MCPTools:
             
             Returns a dictionary with execution results and links to generated files
             """
-            return self.docker_manager.execute_code(container_id, code)
+            return self.docker_manager.execute_python_code(container_id, code)
 
         @self.mcp.tool(
             name="install_package_in_env",

@@ -363,21 +363,24 @@ class DockerManager:
                 "file_links": []
             }
     
-    def _install_package_async(self, container_id: str, package_name: str) -> None:
-        """Asynchronously install package and update status"""
+    def _get_pip_index_url(self):
+        # Try to get PyPI index URL from config, fallback to empty string
         try:
-            status_key = f"{container_id}:{package_name}"
-            self.package_install_status[status_key] = {
-                "status": "installing",
-                "start_time": datetime.now(),
-                "message": f"Installing {package_name}...",
-                "complete": False
-            }
+            return config.get("pypi_index_url", "")
+        except Exception:
+            return ""
 
+    def _install_package_sync(self, container_id: str, package_name: str) -> Dict[str, Any]:
+        """Synchronously install package and return result"""
+        status_key = f"{container_id}:{package_name}"
+        
+        try:
             with self._get_running_container(container_id) as container:
-                # Execute pip install command
+                # Activate venv and install package
+                pip_index_url = self._get_pip_index_url()
+                pip_index_opt = f" --index-url {pip_index_url}" if pip_index_url else ""
                 exec_result = container.exec_run(
-                    cmd=f"pip install {package_name}",
+                    cmd=f"uv pip install{pip_index_opt} {package_name}",
                     stdout=True,
                     stderr=True,
                     privileged=False
@@ -392,15 +395,17 @@ class DockerManager:
                 
                 # Update installation status
                 if exit_code == 0:
-                    self.package_install_status[status_key] = {
+                    status = {
                         "status": "success",
                         "message": f"Successfully installed {package_name}",
                         "complete": True,
                         "success": True,
                         "end_time": datetime.now()
                     }
+                    self.package_install_status[status_key] = status
+                    return status
                 else:
-                    self.package_install_status[status_key] = {
+                    status = {
                         "status": "failed",
                         "message": f"Failed to install {package_name}: {output}",
                         "stderr": output,
@@ -408,6 +413,8 @@ class DockerManager:
                         "success": False,
                         "end_time": datetime.now()
                     }
+                    self.package_install_status[status_key] = status
+                    return status
         except Exception as e:
             logger.error(f"Failed to install package {package_name} for container {container_id}: {e}", exc_info=True)
             
@@ -417,8 +424,7 @@ class DockerManager:
                 stderr = e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else str(e.stderr)
                 error_message = f"{error_message}\nDetails: {stderr}"
             
-            status_key = f"{container_id}:{package_name}"
-            self.package_install_status[status_key] = {
+            status = {
                 "status": "failed",
                 "message": f"Error: {error_message}",
                 "stderr": error_message,
@@ -426,6 +432,8 @@ class DockerManager:
                 "success": False,
                 "end_time": datetime.now()
             }
+            self.package_install_status[status_key] = status
+            return status
     
     def install_package(self, container_id: str, package_name: str) -> Dict[str, Any]:
         """Install package, directly return success if completes within 5 seconds"""
@@ -500,69 +508,6 @@ class DockerManager:
                 "message": f"Installation of {package_name} in progress. Use check_package_status to monitor progress."
             }
     
-    def _install_package_sync(self, container_id: str, package_name: str) -> Dict[str, Any]:
-        """Synchronously install package and return result"""
-        status_key = f"{container_id}:{package_name}"
-        
-        try:
-            with self._get_running_container(container_id) as container:
-                # Execute pip install command
-                exec_result = container.exec_run(
-                    cmd=f"pip install {package_name}",
-                    stdout=True,
-                    stderr=True,
-                    privileged=False
-                )
-                
-                exit_code = exec_result.exit_code
-                output = exec_result.output.decode('utf-8')
-                
-                # Log the output
-                logger.info(f"Package installation output: {output}")
-                logger.info(f"Exit code: {exit_code}")
-                
-                # Update installation status
-                if exit_code == 0:
-                    status = {
-                        "status": "success",
-                        "message": f"Successfully installed {package_name}",
-                        "complete": True,
-                        "success": True,
-                        "end_time": datetime.now()
-                    }
-                    self.package_install_status[status_key] = status
-                    return status
-                else:
-                    status = {
-                        "status": "failed",
-                        "message": f"Failed to install {package_name}: {output}",
-                        "stderr": output,
-                        "complete": True,
-                        "success": False,
-                        "end_time": datetime.now()
-                    }
-                    self.package_install_status[status_key] = status
-                    return status
-        except Exception as e:
-            logger.error(f"Failed to install package {package_name} for container {container_id}: {e}", exc_info=True)
-            
-            # Get more detailed error information
-            error_message = str(e)
-            if hasattr(e, 'stderr') and e.stderr:
-                stderr = e.stderr.decode('utf-8') if isinstance(e.stderr, bytes) else str(e.stderr)
-                error_message = f"{error_message}\nDetails: {stderr}"
-            
-            status = {
-                "status": "failed",
-                "message": f"Error: {error_message}",
-                "stderr": error_message,
-                "complete": True,
-                "success": False,
-                "end_time": datetime.now()
-            }
-            self.package_install_status[status_key] = status
-            return status
-    
     def check_package_status(self, container_id: str, package_name: str) -> Dict[str, Any]:
         """Check the installation status of a package"""
         # Verify container exists
@@ -616,7 +561,7 @@ class DockerManager:
                 with self._get_running_container(container_id) as container:
                     # Use pip list and filter results to check if package is installed
                     exec_result = container.exec_run(
-                        cmd=f"pip list | grep -i {package_name}",
+                        cmd=f"uv pip list | grep -i {package_name}",
                         stdout=True,
                         stderr=True,
                         privileged=False

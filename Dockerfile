@@ -19,8 +19,15 @@ RUN mkdir -p /app/results && chown -R python:python /app
 # Set secure execution user
 USER python
 
+# Create and activate uv venv
+RUN uv venv && \
+    echo 'source .venv/bin/activate' >> /home/python/.bashrc
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV VIRTUAL_ENV="/app/.venv"
+
 # Set working directory to results directory
 WORKDIR /app/results
 
 # Container entry point - use sleep infinity to keep container running
-CMD ["sleep", "infinity"] 
+CMD ["sleep", "infinity"]

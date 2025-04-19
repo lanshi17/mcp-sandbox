@@ -9,6 +9,7 @@ from mcp_sandbox.utils.config import logger, RESULTS_DIR, HOST, PORT
 # Initialize service at module level
 mcp_tools = MCPTools()
 mcp_server = mcp_tools.mcp
+app = mcp_server._mcp_server # for fastmcp command to recognize
 docker_manager = mcp_tools.docker_manager
 
 def main():
