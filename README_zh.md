@@ -1,4 +1,4 @@
-# Python MCP Sandbox
+# MCP Sandbox
 
 [![Python 版本](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
 [![许可证](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
