@@ -39,7 +39,7 @@ python main.py
 2. **list_sandboxes**：列出所有已存在的沙盒（Docker容器），可复用已有的sandbox_id
 3. **execute_python_code**：在指定的Docker沙盒中执行Python代码
 4. **install_package_in_sandbox**：在指定的Docker沙盒中安装Python包
-5. **check_package_status**：检查Docker沙盒中包的安装状态
+5. **check_package_installation_status**：检查Docker沙盒中包的安装状态
 
 ## 项目结构
 
@@ -81,7 +81,7 @@ python-mcp-sandbox/
    - 参数：sandbox_id和package_name（例如，numpy, pandas）
    - 这会启动异步安装，并立即返回状态
 
-3. 安装包后，你可以使用"check_package_status"工具检查其安装状态
+3. 安装包后，你可以使用"check_package_installation_status"工具检查其安装状态
    - 参数：sandbox_id和package_name（要检查的包名）
    - 如果包仍在安装中，你需要使用此工具再次检查
 
@@ -91,9 +91,9 @@ python-mcp-sandbox/
    - 所有生成的文件都存储在沙盒内，file_links字段为直接HTTP链接
 
 工作流示例：
-- 先用list_sandboxes查看可用沙盒，或用create_sandbox新建 → 获取sandbox_id
+- 先用list_sandboxes查看可用沙盒，如果没有可用沙盒，使用create_sandbox新建 → 获取sandbox_id
 - 使用install_package_in_sandbox安装必要的包（如pandas、matplotlib），带sandbox_id参数
-- 使用check_package_status验证包安装，带相同的sandbox_id参数
+- 使用check_package_installation_status验证包安装，带相同的sandbox_id参数
 - 使用execute_python_code运行代码，带sandbox_id参数
 
 代码执行发生在安全的沙盒中。生成的文件（图像、CSV等）会作为HTTP链接提供，可直接浏览器访问或嵌入，无需下载。

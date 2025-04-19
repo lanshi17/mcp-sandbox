@@ -38,7 +38,7 @@ The default SSE endpoint is http://localhost:8000/sse, and you can interact with
 2. **list_sandboxes**: Lists all existing sandboxes (Docker containers) for reuse
 3. **execute_python_code**: Executes Python code in a specified Docker sandbox
 4. **install_package_in_sandbox**: Installs Python packages in a specified Docker sandbox
-5. **check_package_status**: Checks if a package is installed or installation status in a Docker sandbox
+5. **check_package_installation_status**: Checks if a package is installed or installation status in a Docker sandbox
 
 ## Project Structure
 
@@ -79,7 +79,7 @@ I've configured a Python code execution sandbox for you. You can run Python code
    - Parameters: sandbox_id and package_name (e.g., numpy, pandas)
    - This starts asynchronous installation and returns immediately with status
 
-3. After installing packages, you can check their installation status using the "check_package_status" tool
+3. After installing packages, you can check their installation status using the "check_package_installation_status" tool
    - Parameters: sandbox_id and package_name (name of the package to check)
    - If the package is still installing, you need to check again using this tool
 
@@ -89,9 +89,9 @@ I've configured a Python code execution sandbox for you. You can run Python code
    - All generated files are stored inside the sandbox, and file_links are direct HTTP links for inline viewing
 
 Example workflow:
-- Use list_sandboxes to check for available sandboxes, or create_sandbox to create a new one → Get sandbox_id
+- Use list_sandboxes to check for available sandboxes, if no available sandboxes, use create_sandbox to create a new one → Get sandbox_id
 - Use install_package_in_sandbox to install necessary packages (like pandas, matplotlib), with the sandbox_id parameter
-- Use check_package_status to verify package installation, with the same sandbox_id parameter
+- Use check_package_installation_status to verify package installation, with the same sandbox_id parameter
 - Use execute_python_code to run your code, with the sandbox_id parameter
 
 Code execution happens in a secure sandbox. Generated files (images, CSVs, etc.) will be provided as direct HTTP links, which can viewed inline in the browser.
