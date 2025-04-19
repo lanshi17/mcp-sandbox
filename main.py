@@ -4,7 +4,7 @@ from mcp_sandbox.utils.task_manager import PeriodicTaskManager
 from mcp_sandbox.utils.file_manager import check_and_delete_files, cleanup_results_directory
 from mcp_sandbox.core.python_service import PythonExecutionService
 from mcp_sandbox.api.routes import configure_app
-from mcp_sandbox.utils.config import logger, RESULTS_DIR
+from mcp_sandbox.utils.config import logger, RESULTS_DIR, HOST, PORT
 
 # Initialize service at module level
 service = PythonExecutionService()
@@ -36,7 +36,7 @@ def main():
     logger.info(f"Using Docker base image: {docker_manager.base_image}")
     logger.info(f"Using results directory: {RESULTS_DIR}")
     
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=HOST, port=PORT)
 
 if __name__ == "__main__":
     main() 

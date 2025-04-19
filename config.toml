@@ -1,0 +1,18 @@
+[server]
+# Server configuration
+host = "0.0.0.0"
+port = 8000
+
+[paths]
+# Directory for storing results and output files
+results_dir = "results"
+
+[docker]
+# Default Docker image name
+default_image = "python-sandbox:latest"
+
+[logging]
+# Logging configuration
+level = "INFO"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+log_file = "mcp_sandbox.log" 
