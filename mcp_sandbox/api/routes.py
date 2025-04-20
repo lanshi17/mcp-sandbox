@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from mcp_sandbox.api.container_file import router as container_file_router
+from mcp_sandbox.api.sandbox_file import router as sandbox_file_router
 from mcp.server.sse import SseServerTransport
 
 from mcp_sandbox.utils.config import logger
@@ -7,8 +7,8 @@ from mcp_sandbox.utils.config import logger
 def configure_app(app: FastAPI, mcp_server):
     """Configure FastAPI app with routes and middleware"""
 
-    # Mount container file access routes
-    app.include_router(container_file_router)
+    # Mount sandbox file access routes
+    app.include_router(sandbox_file_router)
 
     # SSE handling
     sse = SseServerTransport("/messages/")

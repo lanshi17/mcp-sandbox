@@ -7,8 +7,7 @@ from mcp_sandbox.utils.config import logger, HOST, PORT
 # Initialize service at module level
 mcp_tools = MCPTools()
 mcp_server = mcp_tools.mcp
-app = mcp_server._mcp_server # for fastmcp command to recognize
-docker_manager = mcp_tools.docker_manager
+mcp = mcp_server._mcp_server # for fastmcp command to recognize
 
 def main():
     """Main entry point for the application"""
@@ -20,7 +19,6 @@ def main():
 
     # Start FastAPI server
     logger.info("Starting Python Docker Executor service")
-    logger.info(f"Using Docker base image: {docker_manager.base_image}")
     
     uvicorn.run(app, host=HOST, port=PORT)
 
