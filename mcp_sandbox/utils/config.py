@@ -42,10 +42,34 @@ DEFAULT_DOCKER_IMAGE = config["docker"]["default_image"]
 # Base URL for file access
 BASE_URL = f"http://{HOST}:{PORT}/static/"
 
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, config["logging"]["level"]),
-    format=config["logging"]["format"],
-    handlers=[logging.StreamHandler(), logging.FileHandler(config["logging"]["log_file"])]
-)
-logger = logging.getLogger("MCP_SANDBOX") 
+# Configure logging for MCP_SANDBOX
+logger = logging.getLogger("MCP_SANDBOX")
+logger.setLevel(getattr(logging, config["logging"]["level"]))
+logger.propagate = False
+formatter = logging.Formatter(config["logging"]["format"])
+
+# Color formatter for console logs
+class ColorFormatter(logging.Formatter):
+    COLOR_MAP = {
+        logging.DEBUG: "\033[37m",
+        logging.INFO: "\033[32m",
+        logging.WARNING: "\033[33m",
+        logging.ERROR: "\033[31m",
+        logging.CRITICAL: "\033[41m",
+    }
+    RESET_SEQ = "\033[0m"
+
+    def format(self, record):
+        msg = super().format(record)
+        color = self.COLOR_MAP.get(record.levelno, self.RESET_SEQ)
+        return f"{color}{msg}{self.RESET_SEQ}"
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(ColorFormatter(config["logging"]["format"]))
+# File handler
+file_handler = logging.FileHandler(config["logging"]["log_file"])
+file_handler.setFormatter(formatter)
+# Attach handlers
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)

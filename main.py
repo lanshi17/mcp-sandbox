@@ -18,7 +18,7 @@ def main():
     configure_app(app, mcp_server._mcp_server)
 
     # Start FastAPI server
-    logger.info("Starting Python Docker Executor service")
+    logger.info("Starting MCP Sandbox")
     
     uvicorn.run(app, host=HOST, port=PORT)
 
