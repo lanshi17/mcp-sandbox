@@ -119,3 +119,20 @@ class MCPTools:
                     "stderr": str(e),
                     "exit_code": -1
                 }
+
+        @self.mcp.tool(
+            name="upload_file_to_sandbox",
+            description="Uploads a local file to the specified Docker sandbox. Parameters: sandbox_id (string), local_file_path (string), dest_path (string, optional, default: /app/results)."
+        )
+        def upload_file_to_sandbox(sandbox_id: str, local_file_path: str, dest_path: str = "/app/results") -> dict:
+            """
+            Upload a local file to the specified path inside the sandbox.
+
+            Parameters:
+            - sandbox_id: ID of the sandbox created by create_sandbox
+            - local_file_path: Path to the local file to upload
+            - dest_path: Destination directory in the sandbox (default: /app/results)
+
+            Returns a dict indicating success or error.
+            """
+            return self.docker_manager.upload_file_to_sandbox(sandbox_id, local_file_path, dest_path)

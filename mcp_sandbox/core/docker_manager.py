@@ -651,3 +651,29 @@ class DockerManager:
         except Exception as e:
             logger.error(f"[list_installed_packages] Error listing packages in {sandbox_id}: {e}", exc_info=True)
             return []
+    
+    def upload_file_to_sandbox(self, sandbox_id: str, local_file_path: str, dest_path: str = "/app/results") -> dict:
+        """Upload a local file to the specified path inside the sandbox."""
+        import tarfile
+        import io
+        from pathlib import Path
+        # Verify sandbox exists
+        error = self.verify_sandbox_exists(sandbox_id)
+        if error:
+            return error
+        try:
+            with self._get_running_sandbox(sandbox_id) as sandbox:
+                local_file = Path(local_file_path)
+                if not local_file.exists():
+                    return {"error": True, "message": f"Local file not found: {local_file_path}"}
+                # Create a tar archive in memory
+                tar_stream = io.BytesIO()
+                with tarfile.open(fileobj=tar_stream, mode="w") as tar:
+                    tar.add(str(local_file), arcname=local_file.name)
+                tar_stream.seek(0)
+                # Copy the tar to the container
+                sandbox.put_archive(dest_path, tar_stream.read())
+                return {"success": True, "message": f"Uploaded {local_file.name} to {dest_path} in sandbox {sandbox_id}"}
+        except Exception as e:
+            logger.error(f"Failed to upload file to sandbox {sandbox_id}: {e}", exc_info=True)
+            return {"error": True, "message": str(e)}

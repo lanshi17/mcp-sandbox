@@ -43,6 +43,7 @@ The default SSE endpoint is http://localhost:8000/sse, and you can interact with
 4. **install_package_in_sandbox**: Installs Python packages in a specified Docker sandbox
 5. **check_package_installation_status**: Checks if a package is installed or installation status in a Docker sandbox
 6. **execute_terminal_command**: Executes a terminal command in the specified Docker sandbox. Parameters: `sandbox_id` (string), `command` (string). Returns `stdout`, `stderr`, `exit_code`.
+7. **upload_file_to_sandbox**: Uploads a local file to the specified Docker sandbox. Parameters: `sandbox_id` (string), `local_file_path` (string), `dest_path` (string, optional, default: `/app/results`).
 
 ## Project Structure
 

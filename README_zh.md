@@ -44,6 +44,7 @@ uv run main.py
 4. **install_package_in_sandbox**：在指定的Docker沙盒中安装Python包
 5. **check_package_installation_status**：检查Docker沙盒中包的安装状态
 6. **execute_terminal_command**：在指定的 Docker 沙盒中执行终端命令。参数：sandbox_id（字符串），command（字符串）。返回 stdout、stderr、exit_code。
+7. **upload_file_to_sandbox**：上传本地文件到指定的 Docker 沙盒。参数：sandbox_id（字符串），local_file_path（字符串），dest_path（字符串，可选，默认 /app/results）。
 
 ## 项目结构
 
