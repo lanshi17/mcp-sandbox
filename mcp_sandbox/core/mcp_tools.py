@@ -14,6 +14,22 @@ class MCPTools:
     
     def _register_mcp_tools(self):
         """Register all MCP tools"""
+
+        @self.mcp.tool(
+            name="list_sandboxes",
+            description="Lists all existing Python Docker sandboxes and their status. Each item also includes installed Python packages."
+        )
+        def list_sandboxes() -> list:
+            """
+            Return a list of all existing Python Docker sandboxes managed by this service.
+            Each item includes sandbox_id, status, image, created, last_used, and a list of installed packages.
+            """
+            sandboxes = self.docker_manager.list_sandboxes()
+            # For each sandbox, get installed packages
+            for sandbox in sandboxes:
+                sandbox["installed_packages"] = self.docker_manager.list_installed_packages(sandbox["sandbox_id"])
+            return sandboxes
+
         
         @self.mcp.tool(
             name="create_sandbox", 
@@ -27,22 +43,6 @@ class MCPTools:
             The sandbox will be automatically cleaned up after 1 hours of inactivity
             """
             return self.docker_manager.create_sandbox()
-
-        @self.mcp.tool(
-            name="execute_python_code", 
-            description="Executes Python code in a Docker sandbox and returns results with links to generated files. Parameters: sandbox_id (string) - The sandbox ID to use, code (string) - The Python code to execute"
-        )
-        def execute_python_code(sandbox_id: str, code: str) -> Dict[str, Any]:
-            """
-            Run code in a Python Docker sandbox with specified ID
-            
-            Parameters:
-            - sandbox_id: ID of the sandbox created by create_sandbox
-            - code: The Python code to execute
-            
-            Returns a dictionary with execution results and links to generated files
-            """
-            return self.docker_manager.execute_python_code(sandbox_id, code)
 
         @self.mcp.tool(
             name="install_package_in_sandbox",
@@ -77,19 +77,21 @@ class MCPTools:
             return self.docker_manager.check_package_status(sandbox_id, package_name)
 
         @self.mcp.tool(
-            name="list_sandboxes",
-            description="Lists all existing Python Docker sandboxes and their status. Each item also includes installed Python packages."
+            name="execute_python_code", 
+            description="Executes Python code in a Docker sandbox and returns results with links to generated files. Parameters: sandbox_id (string) - The sandbox ID to use, code (string) - The Python code to execute"
         )
-        def list_sandboxes() -> list:
+        def execute_python_code(sandbox_id: str, code: str) -> Dict[str, Any]:
             """
-            Return a list of all existing Python Docker sandboxes managed by this service.
-            Each item includes sandbox_id, status, image, created, last_used, and a list of installed packages.
+            Run code in a Python Docker sandbox with specified ID
+            
+            Parameters:
+            - sandbox_id: ID of the sandbox created by create_sandbox
+            - code: The Python code to execute
+            
+            Returns a dictionary with execution results and links to generated files
             """
-            sandboxes = self.docker_manager.list_sandboxes()
-            # For each sandbox, get installed packages
-            for sandbox in sandboxes:
-                sandbox["installed_packages"] = self.docker_manager.list_installed_packages(sandbox["sandbox_id"])
-            return sandboxes
+            return self.docker_manager.execute_python_code(sandbox_id, code)
+
 
         @self.mcp.tool(
             name="execute_terminal_command",
