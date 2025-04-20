@@ -100,4 +100,21 @@ Remember not to use plt.show() in your Python code. For visualizations:
 - Save figures to files using plt.savefig() instead of plt.show()
 - For data, use methods like df.to_csv() or df.to_excel() to save as files
 - All saved files will automatically appear as HTTP links in the results, which you can open or embed directly.
-``` 
+```
+
+## MCP Example Config
+
+Below is an example config:
+
+```json
+{
+  "mcpServers": {
+    "mcp-sandbox": {
+      "type": "sse",
+      "serverUrl": "http://localhost:8000/sse"
+    }
+  }
+}
+```
+
+Modify the `serverUrl` as needed for your environment.

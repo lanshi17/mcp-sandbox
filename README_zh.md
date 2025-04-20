@@ -102,4 +102,21 @@ python-mcp-sandbox/
 - 保存图形到文件请用plt.savefig()，不要用plt.show()
 - 数据请用df.to_csv()、df.to_excel()等方法保存为文件
 - 所有保存的文件都会自动作为HTTP链接出现在结果中，可直接打开或嵌入
-``` 
+```
+
+## MCP 配置示例
+
+以下为示例配置：
+
+```json
+{
+  "mcpServers": {
+    "mcp-sandbox": {
+      "type": "sse",
+      "serverUrl": "http://localhost:8000/sse"
+    }
+  }
+}
+```
+
+请根据实际情况修改 `serverUrl` 地址。

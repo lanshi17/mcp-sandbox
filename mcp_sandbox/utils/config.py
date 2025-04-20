@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
     },
     "docker": {
         "default_image": "python-sandbox:latest",
-        "dockerfile_path": "Dockerfile",
+        "dockerfile_path": "sandbox_images/Dockerfile",
         "check_dockerfile_changes": True,
         "build_info_file": ".docker_build_info",
     },
@@ -40,7 +40,7 @@ PORT = int(os.environ.get("APP_PORT", config["server"]["port"]))
 DEFAULT_DOCKER_IMAGE = config["docker"]["default_image"]
 
 # Base URL for file access
-BASE_URL = f"http://{'localhost' if HOST == '0.0.0.0' else HOST}:{PORT}/static/"
+BASE_URL = f"http://{HOST}:{PORT}/static/"
 
 # Configure logging
 logging.basicConfig(

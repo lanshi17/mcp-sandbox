@@ -7,7 +7,7 @@ port = 8000
 # Default Docker image name
 default_image = "python-sandbox:latest"
 # Dockerfile path
-dockerfile_path = "Dockerfile"
+dockerfile_path = "sandbox_images/Dockerfile"
 # Whether to check for Dockerfile changes and rebuild if needed
 check_dockerfile_changes = true
 # File to store last build information
