@@ -1,5 +1,9 @@
 # MCP Sandbox
 
+<p align="center">
+  <img src="assets/mcp_logo.svg" alt="MCP Sandbox Logo" width="120" height="120" />
+</p>
+
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![UV](https://img.shields.io/badge/UV-Package%20Manager-blueviolet)](https://github.com/astral-sh/uv)
