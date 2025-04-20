@@ -90,3 +90,32 @@ class MCPTools:
             for sandbox in sandboxes:
                 sandbox["installed_packages"] = self.docker_manager.list_installed_packages(sandbox["sandbox_id"])
             return sandboxes
+
+        @self.mcp.tool(
+            name="execute_terminal_command",
+            description="Executes a terminal command in the specified Docker sandbox. Parameters: sandbox_id (string), command (string). Returns stdout, stderr, exit_code."
+        )
+        def execute_terminal_command(sandbox_id: str, command: str) -> Dict[str, Any]:
+            """
+            Execute a shell command in the specified Docker sandbox.
+
+            Parameters:
+            - sandbox_id: ID of the sandbox created by create_sandbox
+            - command: The shell command to execute
+
+            Returns a dictionary with stdout, stderr, and exit_code
+            """
+            try:
+                with self.docker_manager._get_running_sandbox(sandbox_id) as sandbox:
+                    exec_result = sandbox.exec_run(command, stdout=True, stderr=True, stdin=False, tty=False)
+                    return {
+                        "stdout": exec_result.output.decode(errors="replace") if exec_result.output else "",
+                        "stderr": "",
+                        "exit_code": exec_result.exit_code
+                    }
+            except Exception as e:
+                return {
+                    "stdout": "",
+                    "stderr": str(e),
+                    "exit_code": -1
+                }

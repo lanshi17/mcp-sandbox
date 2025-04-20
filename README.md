@@ -27,11 +27,10 @@ git clone https://github.com/JohanLi233/python-mcp-sandbox.git
 cd python-mcp-sandbox
 
 uv venv
-
-# Activate venv
+uv sync
 
 # Start the server
-uv run mcp_sandbox.py
+uv run main.py
 ```
 
 The default SSE endpoint is http://localhost:8000/sse, and you can interact with it via the MCP Inspector through SSE or any other client that supports SSE connections.
@@ -43,6 +42,7 @@ The default SSE endpoint is http://localhost:8000/sse, and you can interact with
 3. **execute_python_code**: Executes Python code in a specified Docker sandbox
 4. **install_package_in_sandbox**: Installs Python packages in a specified Docker sandbox
 5. **check_package_installation_status**: Checks if a package is installed or installation status in a Docker sandbox
+6. **execute_terminal_command**: Executes a terminal command in the specified Docker sandbox. Parameters: `sandbox_id` (string), `command` (string). Returns `stdout`, `stderr`, `exit_code`.
 
 ## Project Structure
 

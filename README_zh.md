@@ -26,13 +26,12 @@ Python MCP Sandbox是一个交互式Python代码执行环境，允许用户和LL
 git clone https://github.com/JohanLi233/python-mcp-sandbox.git
 cd python-mcp-sandbox
 
-# 安装依赖
-pip install -r requirements.txt
-
-# 激活虚拟环境
+# 创建并激活虚拟环境
+uv venv
+uv sync
 
 # 启动服务器
-python main.py
+uv run main.py
 ```
 
 默认的SSE端点是http://localhost:8000/sse，你可以通过MCP Inspector或任何支持SSE连接的客户端与其交互。
@@ -44,6 +43,7 @@ python main.py
 3. **execute_python_code**：在指定的Docker沙盒中执行Python代码
 4. **install_package_in_sandbox**：在指定的Docker沙盒中安装Python包
 5. **check_package_installation_status**：检查Docker沙盒中包的安装状态
+6. **execute_terminal_command**：在指定的 Docker 沙盒中执行终端命令。参数：sandbox_id（字符串），command（字符串）。返回 stdout、stderr、exit_code。
 
 ## 项目结构
 
