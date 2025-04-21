@@ -15,7 +15,7 @@ def main():
     mcp_server = sandbox_plugin.mcp
     
     # Configure app routes and middlewares
-    configure_app(app, mcp_server)
+    configure_app(app, mcp_server._mcp_server)
 
     # Start FastAPI server
     logger.info("Starting MCP Sandbox")
