@@ -10,15 +10,15 @@ def configure_app(app: FastAPI, mcp_server):
     # Mount sandbox file access routes
     app.include_router(sandbox_file_router)
 
-    # SSE handling
-    sse = SseServerTransport("/messages/")
+    # Server-Sent Events (SSE) handling
+    event_stream = SseServerTransport("/messages/")
 
-    async def handle_sse(request: Request) -> None:
-        """Handle SSE connections"""
+    async def handle_event_stream(request: Request) -> None:
+        """Handle Server-Sent Events (SSE) connections"""
         # Set up initialization options
         initialization_options = mcp_server.create_initialization_options()
         
-        async with sse.connect_sse(
+        async with event_stream.connect_sse(
                 request.scope,
                 request.receive,
                 request._send,  # noqa: SLF001
@@ -30,8 +30,8 @@ def configure_app(app: FastAPI, mcp_server):
             )
 
     # Add SSE routes
-    app.add_route("/sse", handle_sse)
-    app.mount("/messages/", app=sse.handle_post_message)
+    app.add_route("/sse", handle_event_stream)
+    app.mount("/messages/", app=event_stream.handle_post_message)
 
     @app.get("/health")
     async def health_check():
@@ -50,4 +50,4 @@ def configure_app(app: FastAPI, mcp_server):
         
         return response
     
-    return sse 
+    return event_stream 
