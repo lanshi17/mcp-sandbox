@@ -25,8 +25,16 @@ def get_sandbox_file(
     Returns the file content as a download if found.
     """
     try:
-        sandbox = sandbox_manager.sandbox_client.containers.get(sandbox_id)
-        stream, stat = sandbox.get_archive(file_path)
+        container, error = sandbox_manager.get_container_by_sandbox_id(sandbox_id)
+        if error:
+            logger.error(f"Failed to get container for sandbox {sandbox_id}: {error['message']}")
+            raise HTTPException(status_code=404, detail=f"Sandbox not found: {sandbox_id}")
+            
+        if not container:
+            logger.error(f"No container found for sandbox {sandbox_id}")
+            raise HTTPException(status_code=404, detail=f"Container not found for sandbox: {sandbox_id}")
+            
+        stream, stat = container.get_archive(file_path)
         tar_bytes = io.BytesIO(b"".join(stream))
         with tarfile.open(fileobj=tar_bytes) as tar:
             members = tar.getmembers()

@@ -3,6 +3,11 @@
 host = "0.0.0.0"
 port = 8000
 
+[auth]
+require_auth = False
+# Default user ID when authentication is disabled
+default_user_id = "root"
+
 [docker]
 # Default Docker image name
 default_image = "python-sandbox:latest"

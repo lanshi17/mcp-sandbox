@@ -5,17 +5,28 @@ from pathlib import Path
 
 class SandboxFileOpsMixin:
     def list_files_in_sandbox(self, sandbox_id: str, directory: str = "/app/results", with_stat: bool = False) -> List:
+        from mcp_sandbox.utils.config import logger
         try:
-            sandbox = self.sandbox_client.containers.get(sandbox_id)
-            exec_result = sandbox.exec_run(f"ls -1 {directory}")
+            container, error = self.get_container_by_sandbox_id(sandbox_id)
+            if error:
+                logger.error(f"Failed to get container for sandbox {sandbox_id}: {error['message']}")
+                return []
+            
+            if not container:
+                logger.error(f"No container found for sandbox {sandbox_id}")
+                return []
+                
+            exec_result = container.exec_run(f"ls -1 {directory}")
             if exec_result.exit_code != 0:
                 return []
+                
             files = exec_result.output.decode().splitlines()
             full_paths = [f"{directory.rstrip('/')}/{f}" for f in files]
+            
             if with_stat:
                 stat_files = []
                 for f in full_paths:
-                    stat_result = sandbox.exec_run(f'stat -c "%n|%Z" "{f}"')
+                    stat_result = container.exec_run(f'stat -c "%n|%Z" "{f}"')
                     if stat_result.exit_code == 0:
                         parts = stat_result.output.decode().strip().split("|", 1)
                         if len(parts) == 2:

@@ -186,15 +186,29 @@ class SandboxPackageMixin:
         import re
         import json
         from mcp_sandbox.utils.config import logger
+        
         try:
-            sandbox = self.sandbox_client.containers.get(sandbox_id)
+            # 使用get_container_by_sandbox_id方法获取容器
+            sandbox, error = self.get_container_by_sandbox_id(sandbox_id)
+            if error:
+                logger.warning(f"[list_installed_packages] {error['message']}")
+                return []
+            
+            # 确保sandbox是一个有效的容器对象
+            if not sandbox:
+                logger.warning(f"[list_installed_packages] No valid container for sandbox: {sandbox_id}")
+                return []
+                
+            logger.info(f"[list_installed_packages] Using container for sandbox: {sandbox_id}")
             exec_result = sandbox.exec_run('uv pip list --format=json')
             output = exec_result.output.decode()
             match = re.search(r'\[.*\]', output, re.DOTALL)
             if match:
                 json_str = match.group(0)
                 try:
-                    return json.loads(json_str)
+                    packages = json.loads(json_str)
+                    logger.info(f"[list_installed_packages] Successfully listed {len(packages)} packages for sandbox {sandbox_id}")
+                    return packages
                 except Exception as parse_err:
                     logger.error(f"[list_installed_packages] JSON parse error: {parse_err} | json_str={json_str!r}")
                     return []

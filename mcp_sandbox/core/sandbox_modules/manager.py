@@ -6,6 +6,7 @@ from pathlib import Path
 import hashlib
 from contextlib import contextmanager
 from mcp_sandbox.utils.config import logger, DEFAULT_DOCKER_IMAGE, config
+from mcp_sandbox.db.database import db
 import docker
 
 class SandboxManager:
@@ -106,24 +107,8 @@ class SandboxManager:
         except Exception as e:
             logger.error(f"Failed to load existing sandboxes: {e}", exc_info=True)
 
-    def get_sandbox_for_session(self, session_id: str) -> str:
-        """Get sandbox ID for a session, create new one if not exists"""
-        if session_id in self.session_sandbox_map:
-            sandbox_id = self.session_sandbox_map[session_id]
-            try:
-                self.sandbox_client.containers.get(sandbox_id)
-                self.sandbox_last_used[sandbox_id] = datetime.now()
-                logger.info(f"Session {session_id} using existing sandbox {sandbox_id}")
-                return sandbox_id
-            except docker.errors.NotFound:
-                logger.info(f"Sandbox {sandbox_id} for session {session_id} not found, creating new one")
-        sandbox_id = self.create_sandbox()
-        self.session_sandbox_map[session_id] = sandbox_id
-        logger.info(f"Created new sandbox {sandbox_id} for session {session_id}")
-        return sandbox_id
-
     def create_sandbox(self) -> str:
-        """Create a new Sandbox and return its ID"""
+        """Create a new Sandbox container and return its Docker container ID"""
         sandbox_name = f"python-sandbox-{str(uuid.uuid4())[:8]}"
         try:
             sandbox = self.sandbox_client.containers.create(
@@ -140,51 +125,215 @@ class SandboxManager:
                 security_opt=['no-new-privileges'],
             )
             sandbox.start()
-            sandbox_id = sandbox.id
-            self.sandbox_last_used[sandbox_id] = datetime.now()
-            logger.info(f"Created new sandbox: {sandbox_id} (name: {sandbox_name})")
-            return sandbox_id
+            docker_container_id = sandbox.id
+            logger.info(f"Created new sandbox: {docker_container_id} (name: {sandbox_name})")
+            self.sandbox_last_used[docker_container_id] = datetime.now()
+            return docker_container_id
         except Exception as e:
             logger.error(f"Failed to create sandbox: {e}", exc_info=True)
             raise
+            
+    def create_user_sandbox(self, user_id: Optional[str] = None, name: Optional[str] = None) -> dict:
+        """Create a new sandbox for a user, with database record and Docker container
+        
+        Args:
+            user_id: The ID of the user who owns the sandbox. If None, uses first user in DB.
+            name: Optional name for the sandbox.
+            
+        Returns:
+            Dictionary with sandbox information
+        """
+        # Import here to avoid circular imports
+        from mcp_sandbox.db.database import db
+        
+        # If no user ID provided, check if we're testing/debugging
+        if not user_id:
+            # Fallback for testing - use the first user in the database
+            all_users = db.get_all_users()
+            if all_users:
+                user_id = all_users[0].get("id")
+                logger.info(f"Fallback to first user: {user_id}")
+            else:
+                return {"error": True, "message": "User authentication required"}
+        
+        logger.info(f"Creating sandbox for user_id: {user_id}")
+        
+        # Create the sandbox and get container ID
+        try:
+            # 1. Create the Docker container (internal implementation detail)
+            docker_container_id = self.create_sandbox()
+            
+            # 2. Create database record, linking container ID
+            sandbox_id = db.create_sandbox(user_id, name, docker_container_id)
+            logger.info(f"Created sandbox with ID: {sandbox_id} (container ID: {docker_container_id})")
+            
+            # 3. Return only sandbox_id related info, don't expose container ID
+            sandbox_name = name or f"Sandbox {len(db.get_user_sandboxes(user_id))}"
+            return {
+                "sandbox_id": sandbox_id, 
+                "user_id": user_id,
+                "name": sandbox_name, 
+                "status": "active"
+            }
+        except Exception as e:
+            logger.error(f"Error creating sandbox: {e}", exc_info=True)
+            return {"error": True, "message": str(e)}
+
+    def get_container_by_sandbox_id(self, sandbox_id: str):
+        """Get the container associated with a sandbox ID"""
+        # Get sandbox record from database
+        sandbox_record = db.get_sandbox(sandbox_id)
+        if not sandbox_record:
+            logger.warning(f"[get_container_by_sandbox_id] Sandbox not found in database: {sandbox_id}")
+            return None, {"error": True, "message": f"Sandbox not found: {sandbox_id}"}
+        
+        # Get Docker container ID
+        container_id = sandbox_record.get("docker_container_id")
+        if not container_id:
+            logger.warning(f"[get_container_by_sandbox_id] No container ID for sandbox: {sandbox_id}")
+            return None, {"error": True, "message": f"No container ID for sandbox: {sandbox_id}"}
+        
+        # Get Docker container
+        try:
+            logger.debug(f"[get_container_by_sandbox_id] Getting container {container_id} for sandbox {sandbox_id}")
+            container = self.sandbox_client.containers.get(container_id)
+            # Update last used time
+            self.sandbox_last_used[container_id] = datetime.now()
+            return container, None
+        except docker.errors.NotFound:
+            logger.error(f"[get_container_by_sandbox_id] Container {container_id} not found for sandbox {sandbox_id}")
+            return None, {"error": True, "message": f"Container not found for sandbox: {sandbox_id}"}
+        except Exception as e:
+            logger.error(f"[get_container_by_sandbox_id] Error getting container for sandbox {sandbox_id}: {e}", exc_info=True)
+            return None, {"error": True, "message": str(e)}
 
     def verify_sandbox_exists(self, sandbox_id: str) -> Optional[Dict[str, Any]]:
-        """Verify sandbox exists and clean up if not. Returns error dict if not exists."""
-        if sandbox_id not in self.sandbox_last_used:
-            return {"error": True, "message": f"Sandbox not found: {sandbox_id}"}
+        """Verify if sandbox exists, using sandbox_id instead of container ID"""
+        container, error = self.get_container_by_sandbox_id(sandbox_id)
+        if error:
+            return error
+        return None
+
+    def delete_sandbox(self, sandbox_id: str) -> Dict[str, Any]:
+        """Delete a sandbox container and cleanup resources"""
         try:
-            self.sandbox_client.containers.get(sandbox_id)
-            self.sandbox_last_used[sandbox_id] = datetime.now()
-            return None
-        except docker.errors.NotFound as e:
-            return {"error": True, "message": str(e) or f"Sandbox not found: {sandbox_id}"}
+            # Find containers that might match this sandbox ID
+            logger.info(f"Looking for containers matching sandbox ID: {sandbox_id}")
+            
+            # Get all containers including stopped ones
+            all_containers = self.sandbox_client.containers.list(all=True)
+            logger.info(f"Found {len(all_containers)} total containers")
+            
+            # Find containers by ID or name matching the sandbox ID
+            containers_to_delete = []
+            for container in all_containers:
+                container_id = container.id
+                container_name = container.name
+                container_labels = container.labels
+                
+                # Check if this container matches our sandbox ID in any way
+                if any([
+                    # Exact ID match
+                    container_id == sandbox_id,
+                    # ID prefix match (Docker sometimes uses short IDs)
+                    container_id.startswith(sandbox_id),
+                    # Name contains the sandbox ID
+                    sandbox_id in container_name,
+                    # Sandbox ID in labels
+                    container_labels.get("sandbox_id") == sandbox_id,
+                    # The container name follows our naming convention
+                    container_name.startswith("python-sandbox-") and sandbox_id in container_name
+                ]):
+                    containers_to_delete.append(container)
+                    logger.info(f"Found container to delete: ID={container_id}, Name={container_name}")
+            
+            # If no containers found, just clean up tracking data
+            if not containers_to_delete:
+                logger.warning(f"No containers found matching sandbox ID: {sandbox_id}")
+                # Clean up tracking data anyway
+                if sandbox_id in self.sandbox_last_used:
+                    del self.sandbox_last_used[sandbox_id]
+                    logger.info(f"Removed sandbox {sandbox_id} from tracking dict")
+                
+                # Remove from session mapping if present
+                for session_id, sb_id in list(self.session_sandbox_map.items()):
+                    if sb_id == sandbox_id:
+                        del self.session_sandbox_map[session_id]
+                        logger.info(f"Removed sandbox {sandbox_id} from session mapping")
+                
+                return {"success": True, "message": f"No containers found for sandbox {sandbox_id}, but removed from tracking"}
+            
+            # Delete all matching containers
+            for container in containers_to_delete:
+                logger.info(f"Processing container: ID={container.id}, Name={container.name}, Status={container.status}")
+                
+                try:
+                    # Stop the container if it's running
+                    if container.status == "running":
+                        logger.info(f"Stopping container {container.id}...")
+                        container.stop(timeout=0)
+                    
+                    # Remove the container
+                    logger.info(f"Removing container {container.id}...")
+                    container.remove(force=True)
+                    logger.info(f"Successfully removed container {container.id}")
+                except Exception as container_error:
+                    logger.error(f"Error removing container {container.id}: {str(container_error)}", exc_info=True)
+            
+            # Clean up tracking data
+            if sandbox_id in self.sandbox_last_used:
+                del self.sandbox_last_used[sandbox_id]
+                logger.info(f"Removed sandbox {sandbox_id} from tracking dict")
+            
+            # Remove from session mapping if present
+            for session_id, sb_id in list(self.session_sandbox_map.items()):
+                if sb_id == sandbox_id:
+                    del self.session_sandbox_map[session_id]
+                    logger.info(f"Removed sandbox {sandbox_id} from session mapping")
+            
+            return {"success": True, "message": f"Sandbox {sandbox_id} deleted successfully ({len(containers_to_delete)} containers removed)"}
+        
+        except Exception as e:
+            error_msg = f"Failed to delete sandbox {sandbox_id}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            
+            # Even if there's an error, try to clean up tracking data
+            try:
+                if sandbox_id in self.sandbox_last_used:
+                    del self.sandbox_last_used[sandbox_id]
+                
+                for session_id, sb_id in list(self.session_sandbox_map.items()):
+                    if sb_id == sandbox_id:
+                        del self.session_sandbox_map[session_id]
+            except Exception as cleanup_error:
+                logger.error(f"Error during cleanup of tracking data: {str(cleanup_error)}", exc_info=True)
+            
+            return {"success": False, "message": error_msg, "error": str(e)}
 
     @contextmanager
     def _get_running_sandbox(self, sandbox_id: str):
-        """Context manager to get a running sandbox, with auto-restart if needed"""
-        try:
-            sandbox = self.sandbox_client.containers.get(sandbox_id)
+        """Get running container by sandbox_id"""
+        container, error = self.get_container_by_sandbox_id(sandbox_id)
+        if error:
+            logger.error(f"Failed to get container for sandbox {sandbox_id}: {error['message']}")
+            raise ValueError(error["message"])
             
-            # Ensure sandbox is running
-            if sandbox.status != "running":
-                logger.info(f"Sandbox {sandbox_id} is not running. Current status: {sandbox.status}")
-                
-                # If sandbox status is exited, try to get sandbox logs to understand why
-                if sandbox.status == "exited":
-                    try:
-                        logs = sandbox.logs().decode('utf-8', errors='replace')
-                        logger.warning(f"Sandbox {sandbox_id} exited. Sandbox logs: {logs}")
-                    except Exception as log_err:
-                        logger.error(f"Failed to get logs for exited sandbox {sandbox_id}: {log_err}")
-                
-                # Try to start the sandbox
-                logger.info(f"Attempting to start sandbox {sandbox_id}...")
-                sandbox.start()
-                sandbox.reload()
-                logger.info(f"Sandbox {sandbox_id} started successfully.")
+        # Ensure container is running
+        if container.status != "running":
+            logger.info(f"Sandbox {sandbox_id} container is not running. Current status: {container.status}")
             
-            yield sandbox
+            # If container has exited, try to get logs to understand why
+            if container.status == "exited":
+                try:
+                    logs = container.logs(tail=50).decode('utf-8')
+                    logger.info(f"Logs from exited container for sandbox {sandbox_id}:\n{logs}")
+                except Exception as log_err:
+                    logger.error(f"Failed to get logs for exited sandbox {sandbox_id}: {log_err}")
             
-        except docker.errors.NotFound:
-            logger.error(f"Sandbox {sandbox_id} not found during operation.")
-            raise ValueError(f"Sandbox {sandbox_id} not found.")
+            # Try to start the container
+            logger.info(f"Attempting to start container for sandbox {sandbox_id}...")
+            container.start()
+            container.reload()
+            logger.info(f"Container for sandbox {sandbox_id} started successfully.")
+        
+        yield container

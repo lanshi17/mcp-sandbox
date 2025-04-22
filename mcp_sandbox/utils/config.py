@@ -12,6 +12,10 @@ DEFAULT_CONFIG = {
         "host": "0.0.0.0",
         "port": 8000,
     },
+    "auth": {
+        "require_auth": False,
+        "default_user_id": "root",
+    },
     "docker": {
         "default_image": "python-sandbox:latest",
         "dockerfile_path": "sandbox_images/Dockerfile",
@@ -38,6 +42,10 @@ except (FileNotFoundError, tomli.TOMLDecodeError) as e:
 HOST = os.environ.get("APP_HOST", config["server"]["host"])
 PORT = int(os.environ.get("APP_PORT", config["server"]["port"]))
 DEFAULT_DOCKER_IMAGE = config["docker"]["default_image"]
+
+# Auth configuration
+REQUIRE_AUTH = config.get("auth", {}).get("require_auth", False)
+DEFAULT_USER_ID = config.get("auth", {}).get("default_user_id", "root")
 
 # Base URL for file access
 BASE_URL = f"http://{HOST}:{PORT}/static/"
