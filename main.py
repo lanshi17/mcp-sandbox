@@ -2,12 +2,14 @@ import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
+from fastapi.staticfiles import StaticFiles
 
 from mcp_sandbox.core.mcp_tools import SandboxToolsPlugin
 from mcp_sandbox.api.routes import configure_app
 from mcp_sandbox.api.auth_routes import router as auth_router
 from mcp_sandbox.db.database import db
-from mcp_sandbox.utils.config import logger, HOST, PORT
+from mcp_sandbox.middleware.auth_middleware import AuthMiddleware
+from mcp_sandbox.utils.config import logger, HOST, PORT, REQUIRE_AUTH
 
 
 # API Key validation for SSE connections
@@ -58,6 +60,9 @@ def main():
         allow_headers=["*"],
     )
     
+    # Add authentication middleware
+    app.add_middleware(AuthMiddleware)
+
     # Include authentication routes
     app.include_router(auth_router)
     
@@ -69,7 +74,8 @@ def main():
     configure_app(app, sandbox_plugin)
 
     # Start FastAPI server
-    logger.info("Starting MCP Sandbox")
+    auth_status = "enabled" if REQUIRE_AUTH else "disabled"
+    logger.info(f"Starting MCP Sandbox with authentication {auth_status}")
     
     uvicorn.run(app, host=HOST, port=PORT)
 

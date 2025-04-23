@@ -3,6 +3,7 @@
 
 /results/*
 .DS_Store
+*.db
 .coverage
 /idea
 

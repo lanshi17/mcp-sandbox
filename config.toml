@@ -4,7 +4,7 @@ host = "0.0.0.0"
 port = 8000
 
 [auth]
-require_auth = False
+require_auth = false
 # Default user ID when authentication is disabled
 default_user_id = "root"
 

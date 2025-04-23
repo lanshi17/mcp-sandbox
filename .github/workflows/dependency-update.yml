@@ -1,0 +1,59 @@
+name: Daily Dependency Update Check
+
+on:
+  schedule:
+    # Run at 0:00 UTC every day
+    - cron: '0 0 * * *'
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Install uv
+        run: |
+          pip install uv
+          
+      - name: Check for dependency updates
+        id: check-updates
+        run: |
+          # Create a copy of the current lock file
+          cp uv.lock uv.lock.old
+          
+          # Update dependencies
+          uv pip compile pyproject.toml -o requirements.txt
+          uv pip sync requirements.txt
+          
+          # Check if there are actually updates
+          if ! diff -q uv.lock uv.lock.old > /dev/null; then
+            echo "UPDATES_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "UPDATES_AVAILABLE=false" >> $GITHUB_ENV
+          fi
+      
+      - name: Create Pull Request
+        if: env.UPDATES_AVAILABLE == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: "chore: update python dependencies"
+          title: "📦 Update Python dependencies"
+          body: |
+            This PR updates Python dependencies to their latest versions.
+            
+            Updated by the automated dependency check workflow using `uv`.
+          branch: "chore/dependency-updates"
+          delete-branch: true
+          labels: "dependencies"

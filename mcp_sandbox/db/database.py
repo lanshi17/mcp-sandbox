@@ -1,139 +1,142 @@
 import os
+import sqlite3
 from typing import Dict, List, Optional
 import uuid
 from datetime import datetime
-import json
-from pathlib import Path
+
 
 
 class Database:
-    """Simple file-based database for user authentication"""
-    """Will be changed"""
-    """Will be changed"""
-    """Will be changed"""
-    
+    """SQLite-based database for user authentication and sandboxes"""
     def __init__(self, db_path: str = None):
         if db_path is None:
-            self.db_path = Path(__file__).parent / "data"
-        else:
-            self.db_path = Path(db_path)
-        
-        self.users_path = self.db_path / "users.json"
-        self.sandboxes_path = self.db_path / "sandboxes.json"
-        
-        # Initialize database files if they don't exist
+            db_path = os.path.join(os.path.dirname(__file__), "sandbox.db")
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
         self._initialize_db()
-    
+
     def _initialize_db(self):
-        """Create database files if they don't exist"""
-        os.makedirs(self.db_path, exist_ok=True)
-        
-        if not self.users_path.exists():
-            with open(self.users_path, "w") as f:
-                json.dump({}, f)
-        
-        if not self.sandboxes_path.exists():
-            with open(self.sandboxes_path, "w") as f:
-                json.dump({}, f)
+        cur = self.conn.cursor()
+        # Users table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE,
+                email TEXT UNIQUE,
+                hashed_password TEXT,
+                created_at TEXT,
+                is_active INTEGER,
+                api_key TEXT
+            )
+        ''')
+        # Sandboxes table
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS sandboxes (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                name TEXT,
+                created_at TEXT,
+                docker_container_id TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        ''')
+        self.conn.commit()
     
     def get_user(self, username: str = None, email: str = None, user_id: str = None) -> Optional[Dict]:
         """Get user by username, email or ID"""
         try:
-            with open(self.users_path, "r") as f:
-                users = json.load(f)
-            
+            cur = self.conn.cursor()
             if username:
-                # Case insensitive username check
-                for uid, user_data in users.items():
-                    if user_data.get("username", "").lower() == username.lower():
-                        return {**user_data, "id": uid}
-            
-            if email:
-                # Case insensitive email check
-                for uid, user_data in users.items():
-                    if user_data.get("email", "").lower() == email.lower():
-                        return {**user_data, "id": uid}
-            
-            if user_id and user_id in users:
-                return {**users[user_id], "id": user_id}
-            
-            return None
+                cur.execute("SELECT * FROM users WHERE LOWER(username) = ?", (username.lower(),))
+            elif email:
+                cur.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email.lower(),))
+            elif user_id:
+                cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            else:
+                return None
+            row = cur.fetchone()
+            return dict(row) if row else None
         except Exception as e:
             print(f"Error retrieving user: {e}")
             return None
     
     def create_user(self, user_data: Dict) -> Dict:
         """Create a new user"""
-        with open(self.users_path, "r") as f:
-            users = json.load(f)
-        
         user_id = str(uuid.uuid4())
         created_at = datetime.now().isoformat()
-        
-        new_user = {
-            **user_data,
+        is_active = 1
+        cur = self.conn.cursor()
+        cur.execute('''
+            INSERT INTO users (id, username, email, hashed_password, created_at, is_active, api_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            user_data.get("username"),
+            user_data.get("email"),
+            user_data.get("hashed_password"),
+            created_at,
+            is_active,
+            user_data.get("api_key")
+        ))
+        self.conn.commit()
+        return {
+            "id": user_id,
+            "username": user_data.get("username"),
+            "email": user_data.get("email"),
+            "hashed_password": user_data.get("hashed_password"),
             "created_at": created_at,
-            "is_active": True
+            "is_active": True,
+            "api_key": user_data.get("api_key")
         }
-        
-        users[user_id] = new_user
-        
-        with open(self.users_path, "w") as f:
-            json.dump(users, f, indent=2)
-        
-        return {**new_user, "id": user_id}
     
     def update_user(self, user_id: str, user_data: Dict) -> Optional[Dict]:
         """Update a user"""
-        with open(self.users_path, "r") as f:
-            users = json.load(f)
-        
-        if user_id not in users:
-            return None
-        
-        updated_user = {**users[user_id], **user_data}
-        users[user_id] = updated_user
-        
-        with open(self.users_path, "w") as f:
-            json.dump(users, f, indent=2)
-        
-        return {**updated_user, "id": user_id}
+        cur = self.conn.cursor()
+        fields = []
+        values = []
+        for k, v in user_data.items():
+            fields.append(f"{k} = ?")
+            values.append(v)
+        values.append(user_id)
+        sql = f"UPDATE users SET {', '.join(fields)} WHERE id = ?"
+        cur.execute(sql, tuple(values))
+        self.conn.commit()
+        return self.get_user(user_id=user_id)
     
     def get_all_users(self) -> List[Dict]:
         """Get all users"""
-        with open(self.users_path, "r") as f:
-            users = json.load(f)
-        
-        return [{"id": user_id, **user_data} for user_id, user_data in users.items()]
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM users")
+        rows = cur.fetchall()
+        return [dict(row) for row in rows]
     
     def create_sandbox(self, user_id: str, name: str = None, docker_container_id: str = None) -> str:
         """Create a new sandbox for a user"""
-        with open(self.sandboxes_path, "r") as f:
-            sandboxes = json.load(f)
-        
         sandbox_id = str(uuid.uuid4())
-        sandboxes[sandbox_id] = {
-            "user_id": user_id,
-            "name": name or f"Sandbox {len([s for s in sandboxes.values() if s.get('user_id') == user_id]) + 1}",
-            "created_at": datetime.now().isoformat(),
-            "docker_container_id": docker_container_id
-        }
-        
-        with open(self.sandboxes_path, "w") as f:
-            json.dump(sandboxes, f, indent=2)
-        
+        created_at = datetime.now().isoformat()
+        if name is None:
+            # Count user's sandboxes
+            cur = self.conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM sandboxes WHERE user_id = ?", (user_id,))
+            count = cur.fetchone()[0]
+            name = f"Sandbox {count + 1}"
+        cur = self.conn.cursor()
+        cur.execute('''
+            INSERT INTO sandboxes (id, user_id, name, created_at, docker_container_id)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            sandbox_id, user_id, name, created_at, docker_container_id
+        ))
+        self.conn.commit()
         return sandbox_id
     
     def get_sandbox(self, sandbox_id: str) -> Optional[Dict]:
         """Get sandbox by ID"""
         try:
-            with open(self.sandboxes_path, "r") as f:
-                sandboxes = json.load(f)
-            
-            if sandbox_id in sandboxes:
-                return {**sandboxes[sandbox_id], "id": sandbox_id}
-            
-            return None
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM sandboxes WHERE id = ?", (sandbox_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
         except Exception as e:
             print(f"Error retrieving sandbox: {e}")
             return None
@@ -141,15 +144,10 @@ class Database:
     def get_user_sandboxes(self, user_id: str) -> List[Dict]:
         """Get all sandboxes for a user"""
         try:
-            with open(self.sandboxes_path, "r") as f:
-                sandboxes = json.load(f)
-            
-            user_sandboxes = []
-            for sandbox_id, sandbox_data in sandboxes.items():
-                if sandbox_data.get("user_id") == user_id:
-                    user_sandboxes.append({**sandbox_data, "id": sandbox_id})
-            
-            return user_sandboxes
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM sandboxes WHERE user_id = ?", (user_id,))
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
         except Exception as e:
             print(f"Error retrieving user sandboxes: {e}")
             return []
@@ -159,25 +157,15 @@ class Database:
         sandbox = self.get_sandbox(sandbox_id)
         if not sandbox:
             return False
-        
         return sandbox.get("user_id") == user_id
     
     def delete_sandbox(self, sandbox_id: str) -> bool:
         """Delete a sandbox by ID"""
         try:
-            with open(self.sandboxes_path, "r") as f:
-                sandboxes = json.load(f)
-            
-            if sandbox_id not in sandboxes:
-                return False
-            
-            # Remove the sandbox from the database
-            del sandboxes[sandbox_id]
-            
-            with open(self.sandboxes_path, "w") as f:
-                json.dump(sandboxes, f, indent=2)
-            
-            return True
+            cur = self.conn.cursor()
+            cur.execute("DELETE FROM sandboxes WHERE id = ?", (sandbox_id,))
+            self.conn.commit()
+            return cur.rowcount > 0
         except Exception as e:
             print(f"Error deleting sandbox: {e}")
             return False

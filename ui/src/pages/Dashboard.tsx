@@ -11,7 +11,6 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [apiKey, setApiKey] = useState<string>('');
   const [sseUrl, setSseUrl] = useState<string>('');
   const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,6 +33,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       console.error('Error fetching sandboxes:', err);
       setError('Failed to load sandbox data. Please try again later.');
       return false;
+    }
+  };
+
+  // Function to copy URL to clipboard
+  const handleCopyUrl = () => {
+    try {
+      navigator.clipboard.writeText(sseUrl);
+      setSuccessMessage('SSE URL copied to clipboard!');
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      console.error('Failed to copy URL:', err);
+      setError('Failed to copy URL to clipboard');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -67,9 +80,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const userData = await authApi.getCurrentUser();
         setUser(userData);
         
-        // Fetch API key
+        // Fetch API key and set SSE URL
         const apiKeyData = await authApi.getApiKey();
-        setApiKey(apiKeyData.api_key);
         setSseUrl(sandboxApi.getSseUrl(apiKeyData.api_key));
         
         // Fetch user's sandboxes
@@ -89,7 +101,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     try {
       setIsRegeneratingKey(true);
       const result = await authApi.regenerateApiKey();
-      setApiKey(result.api_key);
       setSseUrl(sandboxApi.getSseUrl(result.api_key));
     } catch (err) {
       console.error('Error regenerating API key:', err);
@@ -301,33 +312,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </CardDescription>
             </CardHeader>
             <CardContent className="h-full overflow-auto">
-              <div className="space-y-4">
-                <div className="flex flex-col items-center justify-center">
-                  <label className="block text-sm font-medium text-gray-300">Your API Key</label>
-                  <div className="mt-1 flex rounded-md shadow-sm w-full max-w-xl justify-center">
-                    <div className="relative flex items-stretch flex-grow">
-                      <input
-                        type="text"
-                        value={apiKey}
-                        readOnly
-                        className="focus:ring-blue-500 focus:border-blue-500 block w-full rounded-md border-gray-700 bg-gray-800 text-gray-200 pr-10 sm:text-sm text-center"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col items-center justify-center">
-                  <label className="block text-sm font-medium text-gray-300">SSE URL</label>
-                  <div className="mt-1 flex rounded-md shadow-sm w-full max-w-xl justify-center">
-                    <div className="relative flex items-stretch flex-grow">
+              <div className="flex flex-col items-center justify-center w-full h-full">
+                <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto">
+                  <label className="block text-lg font-medium text-gray-300 mb-3">SSE URL</label>
+                  <div className="flex w-full justify-center">
+                    <div className="flex items-center w-full">
                       <input
                         type="text"
                         value={sseUrl}
                         readOnly
-                        className="focus:ring-blue-500 focus:border-blue-500 block w-full rounded-md border-gray-700 bg-gray-800 text-gray-200 pr-10 sm:text-sm text-center"
+                        className="focus:ring-blue-500 focus:border-blue-500 block w-full rounded-none rounded-l-md border border-gray-700 bg-gray-800 text-gray-200 px-4 py-3 text-base"
                       />
+                      <button
+                        type="button"
+                        onClick={handleCopyUrl}
+                        className="inline-flex items-center rounded-r-md border border-gray-700 bg-gray-800 px-6 py-3 text-base font-medium text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        Copy
+                      </button>
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-gray-400 text-center">
+                  <p className="mt-4 text-sm text-gray-400 text-center">
                     Use this URL to connect to the SSE endpoint.
                   </p>
                 </div>
