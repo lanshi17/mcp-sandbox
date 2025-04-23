@@ -145,6 +145,7 @@ class SandboxManager:
         """
         # Import here to avoid circular imports
         from mcp_sandbox.db.database import db
+        from mcp_sandbox.utils.config import USER_SANDBOX_LIMIT
         
         # If no user ID provided, check if we're testing/debugging
         if not user_id:
@@ -157,6 +158,12 @@ class SandboxManager:
                 return {"error": True, "message": "User authentication required"}
         
         logger.info(f"Creating sandbox for user_id: {user_id}")
+        
+        # Check if user has reached their sandbox limit
+        user_sandboxes = db.get_user_sandboxes(user_id)
+        if len(user_sandboxes) >= USER_SANDBOX_LIMIT:
+            logger.warning(f"User {user_id} has reached the sandbox limit of {USER_SANDBOX_LIMIT}")
+            return {"error": True, "message": f"You have reached the maximum limit of {USER_SANDBOX_LIMIT} sandboxes. Please delete an existing sandbox before creating a new one."}
         
         # Create the sandbox and get container ID
         try:

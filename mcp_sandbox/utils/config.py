@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
     "auth": {
         "require_auth": False,
         "default_user_id": "root",
+        "user_sandbox_limit": 3,
     },
     "docker": {
         "default_image": "python-sandbox:latest",
@@ -46,6 +47,7 @@ DEFAULT_DOCKER_IMAGE = config["docker"]["default_image"]
 # Auth configuration
 REQUIRE_AUTH = config.get("auth", {}).get("require_auth", False)
 DEFAULT_USER_ID = config.get("auth", {}).get("default_user_id", "root")
+USER_SANDBOX_LIMIT = config.get("auth", {}).get("user_sandbox_limit", 3)
 
 # Base URL for file access
 BASE_URL = f"http://{HOST}:{PORT}/static/"

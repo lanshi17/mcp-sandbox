@@ -7,6 +7,8 @@ port = 8000
 require_auth = false
 # Default user ID when authentication is disabled
 default_user_id = "root"
+# Maximum number of sandboxes a user can create
+user_sandbox_limit = 3
 
 [docker]
 # Default Docker image name
