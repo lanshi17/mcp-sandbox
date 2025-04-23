@@ -6,9 +6,6 @@ updates:
     schedule:
       interval: "daily"
     open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "python"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -19,9 +16,6 @@ updates:
     schedule:
       interval: "daily"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "frontend"
     commit-message:
       prefix: "chore"
       include: "scope"
