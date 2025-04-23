@@ -26,5 +26,5 @@ level = "INFO"
 format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 log_file = "mcp_sandbox.log"
 
-# PyPI index url for pip install
+[mirror]
 pypi_index_url = "https://pypi.tuna.tsinghua.edu.cn/simple"

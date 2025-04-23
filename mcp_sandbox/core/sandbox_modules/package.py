@@ -1,22 +1,18 @@
 from typing import Dict, Any
 import threading
 from datetime import datetime
+from mcp_sandbox.utils.config import PYPI_INDEX_URL
 
 class SandboxPackageMixin:
-    def _get_pip_index_url(self):
-        from mcp_sandbox.utils.config import config
-        try:
-            return config.get("pypi_index_url", "")
-        except Exception:
-            return ""
 
     def _install_package_sync(self, sandbox_id: str, package_name: str) -> Dict[str, Any]:
         from mcp_sandbox.utils.config import logger
         status_key = f"{sandbox_id}:{package_name}"
         try:
             with self._get_running_sandbox(sandbox_id) as sandbox:
-                pip_index_url = self._get_pip_index_url()
+                pip_index_url = PYPI_INDEX_URL
                 pip_index_opt = f" --index-url {pip_index_url}" if pip_index_url else ""
+                print(f"Installing {package_name} with pip index URL: {pip_index_url}")
                 exec_result = sandbox.exec_run(
                     cmd=f"uv pip install{pip_index_opt} {package_name}",
                     stdout=True,

@@ -49,6 +49,8 @@ REQUIRE_AUTH = config.get("auth", {}).get("require_auth", False)
 DEFAULT_USER_ID = config.get("auth", {}).get("default_user_id", "root")
 USER_SANDBOX_LIMIT = config.get("auth", {}).get("user_sandbox_limit", 3)
 
+PYPI_INDEX_URL = config["mirror"]["pypi_index_url"]
+
 # Base URL for file access
 BASE_URL = f"http://{HOST}:{PORT}/static/"
 
