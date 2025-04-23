@@ -12,3 +12,16 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+      
+  # Check for updates to UI dependencies (npm/pnpm)
+  - package-ecosystem: "npm"
+    directory: "/ui"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
