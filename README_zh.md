@@ -13,8 +13,6 @@
 
 中文 | [English](README.md)
 
-# 早期阶段，功能可能随时发生变化
-
 # 演示
 <p align="center">
   <img src="assets/demo.gif" alt="demo" width="1280"/>
