@@ -14,8 +14,6 @@
 
 [中文文档](README_zh.md) | English
 
-# Early stage, subject to changes
-
 # Demo 
 <p align="center">
   <img src="assets/demo.gif" alt="demo" width="1280"/>
