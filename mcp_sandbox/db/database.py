@@ -110,6 +110,24 @@ class Database:
         rows = cur.fetchall()
         return [dict(row) for row in rows]
     
+    def get_user_by_api_key(self, api_key: str) -> Optional[Dict]:
+        """Get user by API key
+        
+        Args:
+            api_key: The API key to lookup
+            
+        Returns:
+            User dict if API key is valid, None otherwise
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM users WHERE api_key = ?", (api_key,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            print(f"Error retrieving user by API key: {e}")
+            return None
+    
     def create_sandbox(self, user_id: str, name: str = None, docker_container_id: str = None) -> str:
         """Create a new sandbox for a user"""
         sandbox_id = str(uuid.uuid4())

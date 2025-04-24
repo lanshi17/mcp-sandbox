@@ -196,11 +196,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Returns:
             User dict if API key is valid, None otherwise
         """
-        # Find user with provided API key
-        for user in db.get_all_users():
-            if user.get("api_key") == api_key:
-                if not user.get("is_active", True):
-                    return None
-                return user
+        user = db.get_user_by_api_key(api_key)
+        if user and user.get("is_active", True):
+            return user
         
         return None
