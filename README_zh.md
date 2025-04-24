@@ -117,14 +117,27 @@ python-mcp-sandbox/
 
 ## MCP 配置示例
 
-以下为示例配置：
+以下为示例Claude配置：
 
 ```json
 {
   "mcpServers": {
-    "mcp-sandbox": {
-      "type": "sse",
-      "serverUrl": "http://localhost:8000/sse"
+    "mcpSandbox": {
+      "command": "npx",
+      "args": ["-y", "supergateway", "--sse",  "http://localhost:8000/sse"]
+    }
+  }
+}
+```
+
+## MCP 在线配置示例
+
+```json
+{
+  "mcpServers": {
+    "mcpSandbox": {
+      "command": "npx",
+      "args": ["-y", "supergateway", "--sse",  "http://115.190.87.78/sse?api_key=<API_KEY>"]
     }
   }
 }

@@ -114,14 +114,26 @@ Remember not to use plt.show() in your Python code. For visualizations:
 
 ## MCP Example Config
 
-Below is an example config:
+Below is an example config for claude:
 
 ```json
 {
   "mcpServers": {
-    "mcp-sandbox": {
-      "type": "sse",
-      "serverUrl": "http://localhost:8000/sse"
+    "mcpSandbox": {
+      "command": "npx",
+      "args": ["-y", "supergateway", "--sse",  "http://localhost:8000/sse"]
+    }
+  }
+}
+```
+
+## MCP Example Config for Online Demo
+```json
+{
+  "mcpServers": {
+    "mcpSandbox": {
+      "command": "npx",
+      "args": ["-y", "supergateway", "--sse",  "http://115.190.87.78/sse?api_key=<API_KEY>"]
     }
   }
 }
