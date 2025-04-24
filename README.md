@@ -16,6 +16,11 @@
 
 # Early stage, subject to changes
 
+# Demo 
+<p align="center">
+  <img src="assets/demo.gif" alt="demo" width="1280"/>
+</p>
+
 Python MCP Sandbox is an interactive Python code execution tool that allows users and LLMs to safely execute Python code and install packages in isolated Docker containers.
 
 ## Features

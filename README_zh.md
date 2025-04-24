@@ -4,9 +4,7 @@
   <img src="assets/mcp_logo.svg" alt="MCP Sandbox Logo" width="120" height="120" />
 </p>
 
-## 在线演示
-
-**访问演示站点:** [mcp sandbox](http://115.190.87.78/)
+# 在线使用 [mcp sandbox](http://115.190.87.78/)
 
 [![Python 版本](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
 [![许可证](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -16,6 +14,11 @@
 中文 | [English](README.md)
 
 # 早期阶段，功能可能随时发生变化
+
+# 演示
+<p align="center">
+  <img src="assets/demo.gif" alt="demo" width="1280"/>
+</p>
 
 Python MCP Sandbox是一个交互式Python代码执行环境，允许用户和LLM在隔离的Docker容器中安全地执行Python代码和安装包。
 
