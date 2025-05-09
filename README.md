@@ -21,6 +21,9 @@
 
 Python MCP Sandbox is an interactive Python code execution tool that allows users and LLMs to safely execute Python code and install packages in isolated Docker containers.
 
+# Viby
+[Viby](https://github.com/JohanLi233/viby) works with mcp sandbox
+
 ## Features
 
 - 🐳 **Docker Isolation**: Securely run Python code in isolated Docker containers
