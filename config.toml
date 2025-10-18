@@ -8,7 +8,7 @@ require_auth = false
 # Default user ID when authentication is disabled
 default_user_id = "root"
 # Maximum number of sandboxes a user can create
-user_sandbox_limit = 3
+user_sandbox_limit = 10
 
 [docker]
 # Default Docker image name
@@ -27,4 +27,4 @@ format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 log_file = "mcp_sandbox.log"
 
 [mirror]
-pypi_index_url = "http://localhost:3141/root/pypi/+simple/"
+pypi_index_url = "https://mirrors.aliyun.com/pypi/simple/"

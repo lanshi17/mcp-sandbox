@@ -1,7 +1,6 @@
 import axios from "axios";
 
-// Use environment variable if available, otherwise use relative path for production
-const API_URL = import.meta.env.VITE_API_URL || window.location.origin;
+const API_URL = process.env.VITE_API_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: API_URL,
