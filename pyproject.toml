@@ -8,6 +8,7 @@ dependencies = [
     "docker>=7.1.0",
     "fastapi>=0.115.12",
     "fastmcp>=2.2.0",
+    "ipdb>=0.13.13",
     "passlib[bcrypt]>=1.7.4",
     "pydantic[email]>=2.11.3",
     "python-jose[cryptography]>=3.4.0",

@@ -42,9 +42,11 @@ class SandboxFileOpsMixin:
     def get_file_link(self, sandbox_id: str, file_path: str) -> str:
         from mcp_sandbox.utils.config import config
         from mcp_sandbox.db.database import db
-        
-        base_url = getattr(config, "BASE_URL", None) or "http://localhost:8000"
-        
+        # import ipdb
+        # ipdb.set_trace()
+        # graduate student
+        base_url = f"http://{config.get('server', {}).get('host', 'localhost')}:{config.get('server', {}).get('port', 8000)}"
+        api_key = config.get('API_KEY',None)
         sandbox = db.get_sandbox(sandbox_id)
         if sandbox and sandbox.get("user_id"):
             user_id = sandbox.get("user_id")
